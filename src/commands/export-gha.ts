@@ -20,8 +20,6 @@ export type ExportGhaOptions = {
   githubEnvPath?: string;
   projectSlug?: string;
   identityId?: string;
-  clientId?: string;
-  clientSecret?: string;
 };
 
 export async function runExportGha(options: ExportGhaOptions): Promise<void> {
@@ -53,12 +51,17 @@ export async function runExportGha(options: ExportGhaOptions): Promise<void> {
   const runtimePaths = basePaths.filter((p) => allPaths.includes(p));
   const deployOnlyPaths = allPaths.filter((p) => !runtimePaths.includes(p));
 
+  const identityId = options.identityId ?? process.env.INFISICAL_IDENTITY_ID;
+  if (!identityId) {
+    throw new Error(
+      "INFISICAL_IDENTITY_ID required — inseco CI auth is GitHub OIDC only (no client-id/secret fallback). Set `permissions: id-token: write` on the job."
+    );
+  }
+
   const provider = new RemoteProvider({
     domain: config.infisicalDomain,
     projectSlug,
-    identityId: options.identityId ?? process.env.INFISICAL_IDENTITY_ID,
-    clientId: options.clientId ?? process.env.INFISICAL_CLIENT_ID,
-    clientSecret: options.clientSecret ?? process.env.INFISICAL_CLIENT_SECRET,
+    identityId,
     oidcAudience:
       process.env.INFISICAL_OIDC_AUDIENCE ?? config.auth?.oidcAudience,
   });

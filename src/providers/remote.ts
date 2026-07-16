@@ -5,9 +5,12 @@ import type { SecretsProvider } from "./types.js";
 export type RemoteProviderOptions = {
   domain?: string;
   projectSlug: string;
-  identityId?: string;
-  clientId?: string;
-  clientSecret?: string;
+  /**
+   * Infisical machine-identity id bound to a GitHub OIDC auth method. This is
+   * the only CI auth lane inseco supports — there is no client-id/secret
+   * fallback.
+   */
+  identityId: string;
   /**
    * OIDC audience — must match one of the Infisical machine identity's bound
    * audiences. There is no universal default, so it is only appended to the
@@ -21,16 +24,15 @@ export type RemoteProviderOptions = {
 type SecretRecord = { secretKey?: string; secretValue?: string };
 
 /**
- * CI-time provider: talks to the Infisical REST API directly with a machine
- * identity (OIDC preferred, universal-auth fallback). No `infisical` CLI needed
- * in the runner.
+ * CI-time provider: talks to the Infisical REST API directly using a machine
+ * identity via GitHub OIDC. No `infisical` CLI, and no long-lived client
+ * secret, in the runner — the runner's short-lived OIDC token is exchanged for
+ * an Infisical access token.
  */
 export class RemoteProvider implements SecretsProvider {
   private readonly domain: string;
   private readonly projectSlug: string;
-  private readonly identityId?: string;
-  private readonly clientId?: string;
-  private readonly clientSecret?: string;
+  private readonly identityId: string;
   private readonly oidcAudience?: string;
   private readonly fetchFn: typeof fetch;
   private readonly getOidcJwt?: () => Promise<string>;
@@ -40,8 +42,6 @@ export class RemoteProvider implements SecretsProvider {
     this.domain = options.domain ?? "https://app.infisical.com";
     this.projectSlug = options.projectSlug;
     this.identityId = options.identityId;
-    this.clientId = options.clientId;
-    this.clientSecret = options.clientSecret;
     this.oidcAudience = options.oidcAudience;
     this.fetchFn = options.fetchFn ?? fetch;
     this.getOidcJwt = options.getOidcJwt;
@@ -94,47 +94,27 @@ export class RemoteProvider implements SecretsProvider {
   private async getAccessToken(): Promise<string> {
     if (this.token) return this.token;
 
-    if (this.identityId) {
-      const jwt = this.getOidcJwt
-        ? await this.getOidcJwt()
-        : await this.fetchOidcJwtFromEnv();
-      const body = new URLSearchParams({
-        identityId: this.identityId,
-        jwt,
-      });
-      const resp = await this.fetchWithRetry(
-        `${this.domain}/api/v1/auth/oidc-auth/login`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body,
-        }
-      );
-      const data = (await resp.json()) as { accessToken?: string };
-      this.token = data.accessToken ?? "";
-    } else if (this.clientId && this.clientSecret) {
-      const body = new URLSearchParams({
-        clientId: this.clientId,
-        clientSecret: this.clientSecret,
-      });
-      const resp = await this.fetchWithRetry(
-        `${this.domain}/api/v1/auth/universal-auth/login`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body,
-        }
-      );
-      const data = (await resp.json()) as { accessToken?: string };
-      this.token = data.accessToken ?? "";
-    } else {
-      throw new Error(
-        "INFISICAL_IDENTITY_ID or INFISICAL_CLIENT_ID/SECRET required"
-      );
+    if (!this.identityId) {
+      throw new Error("INFISICAL_IDENTITY_ID required for OIDC auth");
     }
 
+    const jwt = this.getOidcJwt
+      ? await this.getOidcJwt()
+      : await this.fetchOidcJwtFromEnv();
+    const body = new URLSearchParams({ identityId: this.identityId, jwt });
+    const resp = await this.fetchWithRetry(
+      `${this.domain}/api/v1/auth/oidc-auth/login`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body,
+      }
+    );
+    const data = (await resp.json()) as { accessToken?: string };
+    this.token = data.accessToken ?? "";
+
     if (!this.token) {
-      throw new Error("Infisical auth failed: empty access token");
+      throw new Error("Infisical OIDC auth failed: empty access token");
     }
     return this.token;
   }

@@ -1,5 +1,8 @@
 name: Load Infisical secrets (inseco)
-description: Fetch secrets from Infisical into the job environment via inseco export-gha (OIDC or universal auth)
+description: >-
+  Fetch secrets from Infisical into the job environment via inseco export-gha.
+  Authentication is GitHub OIDC only — the calling job MUST set
+  `permissions: id-token: write`.
 
 inputs:
   package-id:
@@ -16,17 +19,8 @@ inputs:
     description: 'Infisical project slug'
     required: true
   identity-id:
-    description: 'Machine identity ID for OIDC (preferred)'
-    required: false
-    default: ''
-  client-id:
-    description: 'Universal-auth client ID (fallback when identity-id empty)'
-    required: false
-    default: ''
-  client-secret:
-    description: 'Universal-auth client secret'
-    required: false
-    default: ''
+    description: 'Infisical machine-identity id bound to a GitHub OIDC auth method'
+    required: true
   oidc-audience:
     description: 'OIDC audience (must match the identity bound audiences). Overrides inseco.config auth.oidcAudience.'
     required: false
@@ -39,13 +33,11 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Load secrets into GITHUB_ENV
+    - name: Load secrets into GITHUB_ENV (OIDC)
       shell: bash
       env:
         INFISICAL_PROJECT_SLUG: ${{ inputs.project-slug }}
         INFISICAL_IDENTITY_ID: ${{ inputs.identity-id }}
-        INFISICAL_CLIENT_ID: ${{ inputs.client-id }}
-        INFISICAL_CLIENT_SECRET: ${{ inputs.client-secret }}
         INFISICAL_OIDC_AUDIENCE: ${{ inputs.oidc-audience }}
         INFISICAL_ENV_SLUG: ${{ inputs.environment }}
       run: |

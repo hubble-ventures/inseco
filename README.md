@@ -64,7 +64,7 @@ See [`examples/`](./examples) for a fuller config and manifest.
 | Command | Purpose |
 |---|---|
 | `pull [ids...]` | Write `.env.secrets` locally (uses `infisical export`) |
-| `export-gha <id>` | Mask + append secrets to `GITHUB_ENV` (REST API + OIDC/universal auth) |
+| `export-gha <id>` | Mask + append secrets to `GITHUB_ENV` (REST API + GitHub OIDC) |
 | `list` | Show every manifest and its Infisical paths |
 | `validate` | Validate every `secrets.json` against the schema |
 | `paths <id>` | Print resolved paths (`--comma` for scripting) |
@@ -72,22 +72,51 @@ See [`examples/`](./examples) for a fuller config and manifest.
 
 Common flags: `--env`, `--profile`, `--force`, `--here` (pull the cwd package), `--turbo` (always write, for Turbo caching).
 
+## Authentication
+
+Inseco supports exactly one auth lane per environment — no secrets to rotate, no fallbacks to reason about:
+
+| Where | How | Requires |
+|---|---|---|
+| **Local dev** | Infisical CLI **user login** (`infisical login`) | `infisical` CLI, logged in as you |
+| **CI (GitHub Actions)** | **GitHub OIDC** → Infisical machine identity | `permissions: id-token: write` + an Infisical machine identity with a GitHub OIDC auth method |
+
+There is no client-id/secret (universal-auth) path and no long-lived token anywhere.
+
 ## GitHub Actions
 
-Use the bundled composite action (runs `inseco export-gha` via `npx`):
+Use the bundled composite action (runs `inseco export-gha` via `npx`). The calling job **must** grant `id-token: write` so the runner can mint an OIDC token:
 
 ```yaml
-- uses: hubble-ventures/inseco/action@v1
-  with:
-    package-id: api
-    environment: preview
-    project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
-    identity-id: ${{ vars.INFISICAL_IDENTITY_ID }}    # OIDC preferred
-    client-id: ${{ secrets.INFISICAL_CLIENT_ID }}      # universal-auth fallback
-    client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # REQUIRED — OIDC is the only CI auth lane
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hubble-ventures/inseco/action@v1
+        with:
+          package-id: api
+          environment: production
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          identity-id: ${{ vars.INFISICAL_IDENTITY_ID }}
+          oidc-audience: ${{ vars.INFISICAL_OIDC_AUDIENCE }} # optional
 ```
 
-Secrets are masked and appended to `GITHUB_ENV` for subsequent steps. Any configured `advertiseKeys` hook writes a plain, comma-separated list of runtime key **names** so a deploy step can forward exactly those.
+Secrets are masked and appended to `GITHUB_ENV` for subsequent steps. Any configured `advertiseKeys` hook writes a plain, comma-separated list of runtime key **names** so a deploy step can forward exactly those. A full CI + deploy example is in [`examples/github-actions.yml`](./examples/github-actions.yml).
+
+## Local development
+
+Log in once as yourself; inseco shells out to `infisical export` under your session:
+
+```bash
+infisical login          # authenticate as you
+npx inseco pull          # write .env.secrets next to every secrets.json
+```
+
+Load `.env.secrets` however your dev runtime already loads env files. See [`examples/local-dev.md`](./examples/local-dev.md) for package-script and task-runner wiring.
 
 ## Concepts
 
