@@ -39,8 +39,12 @@ if [ ! -f "$STUB" ]; then
   echo "FAIL: expected $STUB to be written" >&2
   exit 1
 fi
-echo "  wrote apps/api/.env.secrets:"
-sed 's/^/    /' "$STUB"
+# Print ONLY the comment header, never KEY=VALUE lines — this file could hold
+# real values if the smoke were ever pointed at a live Infisical session, and CI
+# logs are world-readable on public repos.
+echo "  wrote apps/api/.env.secrets (header; values redacted):"
+grep '^#' "$STUB" | sed 's/^/    /'
+echo "    ($(grep -cvE '^#|^$' "$STUB") secret var(s) written)"
 rm -f "$STUB"
 
 echo

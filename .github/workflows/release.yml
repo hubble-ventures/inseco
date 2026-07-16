@@ -44,7 +44,9 @@ jobs:
       # Trusted publishing + provenance require npm >= 11.5.1 (newer than the
       # npm bundled with Node 20).
       - name: Upgrade npm (trusted publishing support)
-        run: npm install -g npm@latest
+        # Floor at the first npm with trusted publishing; auto-upgrade within v11,
+        # but don't let an unvetted npm v12+ silently change the publish toolchain.
+        run: npm install -g npm@^11.5.1
 
       - run: npm ci
 
@@ -86,6 +88,7 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           # Pull the section for this version out of CHANGELOG.md (keep-a-changelog).
           awk -v v="$VERSION" '
+            BEGIN { gsub(/\./, "\\.", v) } # match the version literally, not as a regex
             $0 ~ "^## \\[" v "\\]" { grab=1; next }
             grab && /^## \[/ { exit }
             grab { print }
@@ -94,15 +97,25 @@ jobs:
             echo "Release v$VERSION" > release-notes.md
           fi
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release (idempotent)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          gh release create "v$VERSION" \
-            --title "v$VERSION" \
-            --notes-file release-notes.md \
-            --verify-tag
+          # Edit-or-create so re-running a partially-failed release (e.g. the
+          # tag-move step erroring after the release was made) doesn't hard-fail
+          # on "release already exists". (`gh release create` has no --clobber;
+          # that flag is for `gh release upload`.)
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            gh release edit "v$VERSION" \
+              --title "v$VERSION" \
+              --notes-file release-notes.md
+          else
+            gh release create "v$VERSION" \
+              --title "v$VERSION" \
+              --notes-file release-notes.md \
+              --verify-tag
+          fi
 
       - name: Move floating major tag
         run: |
