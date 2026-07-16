@@ -45,4 +45,4 @@ runs:
         if [ -n "${{ inputs.profile }}" ]; then
           args+=(--profile "${{ inputs.profile }}")
         fi
-        npx --yes "inseco@${{ inputs.inseco-version }}" "${args[@]}"
+        npx --yes "@hubble-ventures/inseco@${{ inputs.inseco-version }}" "${args[@]}"

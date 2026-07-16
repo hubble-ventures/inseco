@@ -1,4 +1,4 @@
-import { defineConfig } from "inseco";
+import { defineConfig } from "@hubble-ventures/inseco";
 
 /**
  * Example inseco.config.ts placed at your monorepo root. Inseco finds the

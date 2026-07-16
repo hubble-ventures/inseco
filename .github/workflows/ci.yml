@@ -25,3 +25,7 @@ jobs:
             exit 1
           fi
       - run: npm test
+      # End-to-end smoke of the built CLI against the fixture repo (no live
+      # Infisical). GitHub sets CI=true, so `pull` exercises the CI-stub path.
+      - name: Smoke test (built CLI)
+        run: bash scripts/smoke.sh

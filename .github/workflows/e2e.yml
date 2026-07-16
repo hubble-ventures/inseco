@@ -1,0 +1,78 @@
+name: E2E (composite action, live Infisical)
+
+# Manually-dispatched, end-to-end proof that the bundled composite action does the
+# full CI lane: GitHub OIDC -> Infisical machine identity -> secrets masked and
+# appended to GITHUB_ENV. It runs the REAL published action against a REAL (sandbox)
+# Infisical project — run it AFTER a release so it validates the published package.
+#
+# One-time setup (repo or environment settings → Variables):
+#   INFISICAL_PROJECT_SLUG   sandbox project slug
+#   INFISICAL_IDENTITY_ID    machine identity bound to a GitHub OIDC auth method
+#   INFISICAL_OIDC_AUDIENCE  (optional) audience the identity expects
+#   INSECO_E2E_PACKAGE_ID    a package id resolvable by the repo's inseco config
+#   INSECO_E2E_ENVIRONMENT   Infisical env slug (default: development)
+#   INSECO_E2E_EXPECT_KEY    (optional) a key name the action should export
+#
+# The checkout must also contain an `inseco.config.{json,ts,js}` and a matching
+# `secrets.json` for INSECO_E2E_PACKAGE_ID (a small sandbox fixture at the repo
+# root is fine). Without the required vars the job fails early with instructions.
+
+on:
+  workflow_dispatch:
+    inputs:
+      package-id:
+        description: "package id (overrides INSECO_E2E_PACKAGE_ID)"
+        required: false
+      environment:
+        description: "Infisical env slug"
+        required: false
+        default: development
+
+permissions:
+  id-token: write # OIDC — the only CI auth lane
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preflight — required sandbox config present
+        env:
+          SLUG: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          IDENTITY: ${{ vars.INFISICAL_IDENTITY_ID }}
+          PKG: ${{ inputs.package-id || vars.INSECO_E2E_PACKAGE_ID }}
+        run: |
+          missing=""
+          [ -z "$SLUG" ] && missing="$missing INFISICAL_PROJECT_SLUG"
+          [ -z "$IDENTITY" ] && missing="$missing INFISICAL_IDENTITY_ID"
+          [ -z "$PKG" ] && missing="$missing INSECO_E2E_PACKAGE_ID(or input)"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing required config:$missing — set these repo Variables and add a sandbox inseco.config + secrets.json before running the e2e."
+            exit 1
+          fi
+
+      - name: Load secrets via the bundled composite action (OIDC)
+        uses: ./action
+        with:
+          package-id: ${{ inputs.package-id || vars.INSECO_E2E_PACKAGE_ID }}
+          environment: ${{ inputs.environment || vars.INSECO_E2E_ENVIRONMENT || 'development' }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          identity-id: ${{ vars.INFISICAL_IDENTITY_ID }}
+          oidc-audience: ${{ vars.INFISICAL_OIDC_AUDIENCE }}
+          inseco-version: latest
+
+      - name: Assert a secret reached GITHUB_ENV
+        env:
+          EXPECT: ${{ vars.INSECO_E2E_EXPECT_KEY }}
+        run: |
+          if [ -z "${EXPECT:-}" ]; then
+            echo "No INSECO_E2E_EXPECT_KEY set — action completed without error; skipping value assertion."
+            exit 0
+          fi
+          if [ -z "${!EXPECT:-}" ]; then
+            echo "::error::Expected key '$EXPECT' not present in job env after the action ran."
+            exit 1
+          fi
+          echo "OK: '$EXPECT' was exported to GITHUB_ENV by the composite action (value masked)."
