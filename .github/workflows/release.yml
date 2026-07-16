@@ -1,28 +1,117 @@
 name: Release
 
-# Publishes `inseco` to npm when a GitHub Release is published.
-# Requires an NPM_TOKEN secret with publish rights (or configure npm Trusted
-# Publishing / OIDC and drop the token).
+# Cut a release by pushing a semver tag:
+#
+#   npm version 1.2.3 --no-git-tag-version && git commit -am "release: v1.2.3"
+#   git tag v1.2.3 && git push origin main --tags
+#
+# This workflow then:
+#   1. builds + tests the tagged commit,
+#   2. publishes `inseco` to npm via **trusted publishing** (OIDC) — no NPM_TOKEN
+#      secret, provenance attached automatically,
+#   3. creates a GitHub Release with notes pulled from CHANGELOG.md,
+#   4. moves the floating major tag (e.g. `v1`) to this commit so consumers can
+#      pin `hubble-ventures/inseco/action@v1`.
+#
+# Bootstrapping note: npm trusted publishing must be configured against an
+# existing package, so the FIRST publish (v1.0.0) is done locally to reserve the
+# name (see README "Publishing"). The publish step below is idempotent — if the
+# tagged version already exists on npm it is skipped, so re-running or the first
+# tag push never fails.
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write # create the GitHub Release + move the major tag
+  id-token: write # OIDC: npm trusted publishing + provenance
 
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org
+
+      # Trusted publishing + provenance require npm >= 11.5.1 (newer than the
+      # npm bundled with Node 20).
+      - name: Upgrade npm (trusted publishing support)
+        run: npm install -g npm@latest
+
       - run: npm ci
+
+      - name: Verify tag matches package.json version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::tag v$TAG does not match package.json version $PKG"
+            exit 1
+          fi
+          echo "version=$PKG" >> "$GITHUB_OUTPUT"
+        id: version
+
+      - run: npm run type-check
       - run: npm run build
+
+      - name: Verify committed dist is up to date
+        run: |
+          if ! git diff --exit-code -- dist; then
+            echo "::error::dist/ is stale — run 'npm run build' and commit the result"
+            exit 1
+          fi
+
       - run: npm test
-      - run: npm publish --access public
+
+      - name: Publish to npm (trusted publishing, idempotent)
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if npm view "inseco@$VERSION" version >/dev/null 2>&1; then
+            echo "inseco@$VERSION already on npm — skipping publish."
+          else
+            npm publish --access public --provenance
+          fi
+
+      - name: Extract release notes from CHANGELOG
+        id: notes
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          # Pull the section for this version out of CHANGELOG.md (keep-a-changelog).
+          awk -v v="$VERSION" '
+            $0 ~ "^## \\[" v "\\]" { grab=1; next }
+            grab && /^## \[/ { exit }
+            grab { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "Release v$VERSION" > release-notes.md
+          fi
+
+      - name: Create GitHub Release
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          gh release create "v$VERSION" \
+            --title "v$VERSION" \
+            --notes-file release-notes.md \
+            --verify-tag
+
+      - name: Move floating major tag
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          # Skip prereleases (e.g. 1.0.0-rc.1) — they should not move the major tag.
+          case "$VERSION" in
+            *-*) echo "prerelease $VERSION — not moving major tag"; exit 0 ;;
+          esac
+          MAJOR="v${VERSION%%.*}"
+          git tag -f "$MAJOR"
+          git push origin -f "refs/tags/$MAJOR"
+          echo "Moved $MAJOR -> $GITHUB_SHA"

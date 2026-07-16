@@ -43,9 +43,18 @@ Requires the [`infisical` CLI](https://infisical.com/docs/cli/overview) for loca
 
    ```jsonc
    {
-     "$schema": "https://hubble-ventures.github.io/inseco/secrets.schema.json",
+     "$schema": "https://cdn.jsdelivr.net/npm/inseco@1/schema/secrets.schema.json",
      "paths": ["clerk", "posthog"],
-     "aliases": { "CLERK_PUBLISHABLE_KEY": "VITE_CLERK_PUBLISHABLE_KEY" }
+     "output": ".env", // written next to this manifest; defaults to .env.secrets
+     "aliases": {
+       // One canonical vault key → several prefixed copies in a single output.
+       "GOOGLE_MAPS_API_KEY": [
+         "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY",
+         "VITE_GOOGLE_MAPS_API_KEY"
+       ],
+       // A single target is also fine (string form).
+       "CLERK_PUBLISHABLE_KEY": "VITE_CLERK_PUBLISHABLE_KEY"
+     }
    }
    ```
 
@@ -107,6 +116,8 @@ jobs:
 
 Secrets are masked and appended to `GITHUB_ENV` for subsequent steps. Any configured `advertiseKeys` hook writes a plain, comma-separated list of runtime key **names** so a deploy step can forward exactly those. A full CI + deploy example is in [`examples/github-actions.yml`](./examples/github-actions.yml).
 
+**Pinning the action.** `@v1` is a floating major tag that always points at the latest `v1.x` release — it moves forward on each release but never across a breaking major. For a fully immutable pin, use a release SHA instead: `uses: hubble-ventures/inseco/action@<sha>`. The action shells out to `npx --yes inseco@latest`; pin the package too by passing `inseco-version:` (e.g. the same `1.x` version) if you want the CLI locked as well.
+
 ## Local development
 
 Log in once as yourself; inseco shells out to `infisical export` under your session:
@@ -121,11 +132,33 @@ Load `.env.secrets` however your dev runtime already loads env files. See [`exam
 ## Concepts
 
 - **Manifest (`secrets.json`)** — per package: `paths` (vault folders), optional `profiles`, `aliases`, `ci`, `environments`, `output`.
+- **Output file** — `output` sets the written filename (default `.env.secrets`), placed **next to the manifest**. Because each package owns its own `secrets.json`, this gives a distinct file per package: a root manifest with `"output": ".env.local"` writes the repo-root `.env.local`; a manifest in `apps/backend` with `"output": ".env"` writes `apps/backend/.env`. `output` is a filename only (no path separators) — to target a different directory, place the manifest in that directory.
 - **Profiles** — named path sets that *replace* base `paths` when `--profile` is set. Base paths are runtime secrets; profile-only paths (e.g. `fly`) are deploy/release credentials.
-- **Aliases** — copy a canonical secret to extra tool-specific names. Real secrets of the target name always win; the operation is idempotent and never overwrites.
+- **Aliases** — copy a canonical secret to extra tool-specific names. Each source maps to **one target (string) or many (array)**, so a single vault key can fan out to every framework prefix (`EXPO_PUBLIC_*`, `VITE_*`, `NEXT_PUBLIC_*`) in one output. Real secrets of a target name always win; the operation is idempotent and never overwrites.
 - **CI skip/stub** — `ci.skipWhenEnv` skips the pull when all listed vars are already set in CI; `ci.stubInCi` always stubs in CI. Both write a `.env.secrets` from `process.env` instead of calling Infisical.
 - **Optional keys** — `environments.<slug>.optionalKeys` downgrade a missing key to a `::notice::` in `export-gha` instead of a failure.
 - **Advertise-keys hooks** — publish runtime key *names* (never values) to `GITHUB_ENV` for deploy forwarding.
+
+### Non-secret defaults (`.env.sample`)
+
+Inseco writes **only the secret slice** it pulls from Infisical — it does not merge a
+committed base file. If a package keeps non-secret defaults and structure in a
+`.env.sample`, keep both files and load them together at runtime, secrets last so they
+win:
+
+```bash
+# node — later --env-file overrides earlier ones
+node --env-file=.env.sample --env-file=.env.secrets server.js
+```
+
+```jsonc
+// package.json
+{ "scripts": { "dev": "inseco --here pull && node --env-file=.env.sample --env-file=.env.secrets server.js" } }
+```
+
+Point `output` at whatever filename your loader expects (e.g. `.env` layered over a
+committed `.env.example`). Do **not** overwrite a committed sample with the pulled file
+— they are separate inputs, and losing the sample's defaults would break local dev.
 
 ## Programmatic API
 
@@ -138,6 +171,33 @@ for (const manifest of discoverManifests(config)) {
   await pullManifest({ manifest, provider, repoRoot: config.repoRoot, envName: "development" });
 }
 ```
+
+## Releasing
+
+Releases are cut by pushing a semver tag; [`.github/workflows/release.yml`](./.github/workflows/release.yml) does the rest:
+
+```bash
+npm version 1.2.3 --no-git-tag-version
+git commit -am "release: v1.2.3"
+git tag v1.2.3 && git push origin main --tags
+```
+
+The workflow builds + tests the tagged commit, publishes to npm via **trusted
+publishing** (OIDC — no `NPM_TOKEN` secret, provenance attached automatically),
+creates a GitHub Release from the matching [`CHANGELOG.md`](./CHANGELOG.md) section, and
+moves the floating `v1` tag to the release commit. The publish step is idempotent — a
+version already on npm is skipped.
+
+> **First publish (one time).** npm trusted publishing must be configured against an
+> existing package, so the very first `inseco` publish reserves the name locally:
+>
+> ```bash
+> npm publish --access public   # run once, as an npm user with publish rights
+> ```
+>
+> Then, in the package's npm settings, add a **trusted publisher** for
+> `hubble-ventures/inseco` → workflow `release.yml`. Every subsequent tag push
+> publishes automatically with no token.
 
 ## Design
 
