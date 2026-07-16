@@ -5,7 +5,11 @@ import { normalizeEnvSlug } from "../env-slug.js";
 import { appendSecretsToGithubEnv } from "../github-env.js";
 import { runAdvertiseKeysHooks } from "../hooks.js";
 import { selectEmittedSecrets } from "../include.js";
-import { normalizeFolderPath, resolvePaths } from "../manifest.js";
+import {
+  normalizeFolderPath,
+  resolveInclude,
+  resolvePaths,
+} from "../manifest.js";
 import {
   logMissingOptionalKeys,
   resolveOptionalKeys,
@@ -89,17 +93,19 @@ export async function runExportGha(options: ExportGhaOptions): Promise<void> {
     { ...runtimeSecrets, ...deployOnlySecrets },
     manifest.config
   );
-  // Notice missing optional keys against the pre-include set — a key present in
-  // the folders but filtered out by `include` isn't "missing".
-  logMissingOptionalKeys(aliased, optionalKeys);
   // Default-deny key selection: emit only the allowlisted keys when `include`
-  // is set. Absent = emit all (merged === aliased).
-  const merged = selectEmittedSecrets(
+  // is set. Absent = emit all.
+  const include = resolveInclude(manifest.config, options.profile);
+  // Notice missing optional keys against the pre-include set — a key present in
+  // the folders but filtered out by `include` isn't "missing". Skip keys the
+  // allowlist governs: those get a single notice from selectEmittedSecrets'
+  // unknown-key check, so we don't emit two notices for the same absent key.
+  const includeSet = new Set(include ?? []);
+  logMissingOptionalKeys(
     aliased,
-    manifest.config,
-    options.profile,
-    optionalKeys
+    optionalKeys.filter((k) => !includeSet.has(k))
   );
+  const merged = selectEmittedSecrets(aliased, include, optionalKeys);
   appendSecretsToGithubEnv(githubEnvPath, merged);
 
   // Advertise CANONICAL (pre-alias) key names. Alias targets (e.g.

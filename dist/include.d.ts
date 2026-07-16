@@ -1,4 +1,3 @@
-import { type SecretsManifest } from "./manifest.js";
 export type IncludeResult = {
     /** The emitted map after allowlist filtering. */
     filtered: Record<string, string>;
@@ -24,9 +23,10 @@ export declare function applyInclude(merged: Record<string, string>, include: st
  */
 export declare function enforceIncludeKnown(unknown: string[], optionalKeys: string[]): void;
 /**
- * Shared allowlist step for both emit surfaces: resolve the effective `include`
- * (root, or the profile's if it defines one), filter the aliased map to it, and
- * enforce the unknown-key policy. Returns the filtered map to emit.
+ * Shared allowlist step for both emit surfaces: filter the aliased map to the
+ * (already-resolved) `include` and enforce the unknown-key policy. Callers
+ * resolve `include` once — with {@link resolveInclude} — so the value they use
+ * for headers/logging is the same one that governs the filter.
  */
-export declare function selectEmittedSecrets(aliased: Record<string, string>, manifest: SecretsManifest, profile: string | undefined, optionalKeys: string[]): Record<string, string>;
+export declare function selectEmittedSecrets(aliased: Record<string, string>, include: string[] | undefined, optionalKeys: string[]): Record<string, string>;
 //# sourceMappingURL=include.d.ts.map

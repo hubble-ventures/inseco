@@ -93,8 +93,7 @@ export async function pullManifest(
   const include = resolveInclude(manifest.config, profile);
   const merged = selectEmittedSecrets(
     aliased,
-    manifest.config,
-    profile,
+    include,
     resolveOptionalKeys(manifest.config, envName)
   );
 

@@ -5,7 +5,7 @@ import {
   enforceIncludeKnown,
   selectEmittedSecrets,
 } from "../src/include.js";
-import { loadManifestJson } from "../src/manifest.js";
+import { loadManifestJson, resolveInclude } from "../src/manifest.js";
 
 describe("applyInclude", () => {
   it("emits only the allowlisted keys from a multi-key folder", () => {
@@ -28,6 +28,14 @@ describe("applyInclude", () => {
     const { filtered, unknown } = applyInclude(merged, undefined);
     expect(filtered).toEqual(merged);
     expect(unknown).toEqual([]);
+  });
+
+  it("returns a fresh object even on the undefined pass-through", () => {
+    const merged = { A: "1" };
+    const { filtered } = applyInclude(merged, undefined);
+    expect(filtered).not.toBe(merged);
+    filtered.A = "mutated";
+    expect(merged.A).toBe("1");
   });
 
   it("does not mutate the input map", () => {
@@ -121,7 +129,9 @@ describe("selectEmittedSecrets — profile replace semantics", () => {
       include: ["A"],
       profiles: { deploy: { paths: ["x", "y"], include: ["B"] } },
     });
-    expect(selectEmittedSecrets(aliased, m, "deploy", [])).toEqual({ B: "2" });
+    expect(
+      selectEmittedSecrets(aliased, resolveInclude(m, "deploy"), [])
+    ).toEqual({ B: "2" });
   });
 
   it("a profile without include inherits the root include", () => {
@@ -130,11 +140,15 @@ describe("selectEmittedSecrets — profile replace semantics", () => {
       include: ["A"],
       profiles: { deploy: { paths: ["x", "y"] } },
     });
-    expect(selectEmittedSecrets(aliased, m, "deploy", [])).toEqual({ A: "1" });
+    expect(
+      selectEmittedSecrets(aliased, resolveInclude(m, "deploy"), [])
+    ).toEqual({ A: "1" });
   });
 
   it("emits all keys when no include is set anywhere", () => {
     const m = loadManifestJson({ paths: ["x"] });
-    expect(selectEmittedSecrets(aliased, m, undefined, [])).toEqual(aliased);
+    expect(selectEmittedSecrets(aliased, resolveInclude(m), [])).toEqual(
+      aliased
+    );
   });
 });

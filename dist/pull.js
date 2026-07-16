@@ -42,7 +42,7 @@ export async function pullManifest(options) {
     // Default-deny key selection: emit only the allowlisted keys when `include`
     // is set (after aliases). Absent = emit all.
     const include = resolveInclude(manifest.config, profile);
-    const merged = selectEmittedSecrets(aliased, manifest.config, profile, resolveOptionalKeys(manifest.config, envName));
+    const merged = selectEmittedSecrets(aliased, include, resolveOptionalKeys(manifest.config, envName));
     // filter(Boolean) drops the optional Profile/Include lines when absent. It
     // would also drop a trailing "" sentinel, so append the trailing newline
     // explicitly — otherwise the first secret gets glued onto the "# Generated"
