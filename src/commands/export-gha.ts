@@ -1,0 +1,98 @@
+import { applyAliases } from "../aliases.js";
+import { fetchSecretsForPaths } from "../ci-skip.js";
+import { loadConfig } from "../config.js";
+import { normalizeEnvSlug } from "../env-slug.js";
+import { appendSecretsToGithubEnv } from "../github-env.js";
+import { runAdvertiseKeysHooks } from "../hooks.js";
+import { normalizeFolderPath, resolvePaths } from "../manifest.js";
+import {
+  logMissingOptionalKeys,
+  resolveOptionalKeys,
+} from "../optional-keys.js";
+import { RemoteProvider } from "../providers/remote.js";
+import { discoverManifests } from "../registry.js";
+
+export type ExportGhaOptions = {
+  packageId: string;
+  env: string;
+  profile?: string;
+  cwd?: string;
+  githubEnvPath?: string;
+  projectSlug?: string;
+  identityId?: string;
+  clientId?: string;
+  clientSecret?: string;
+};
+
+export async function runExportGha(options: ExportGhaOptions): Promise<void> {
+  const config = await loadConfig(options.cwd);
+  const envName = normalizeEnvSlug(
+    process.env.INFISICAL_ENV_SLUG ?? options.env
+  );
+  const githubEnvPath = options.githubEnvPath ?? process.env.GITHUB_ENV ?? "";
+  if (!githubEnvPath) {
+    throw new Error("GITHUB_ENV is not set");
+  }
+
+  const projectSlug = options.projectSlug ?? process.env.INFISICAL_PROJECT_SLUG;
+  if (!projectSlug) {
+    throw new Error("INFISICAL_PROJECT_SLUG required");
+  }
+
+  const manifests = discoverManifests(config);
+  const manifest = manifests.find((m) => m.id === options.packageId);
+  if (!manifest) {
+    throw new Error(`Unknown package id: ${options.packageId}`);
+  }
+
+  // Base `paths` are the app's runtime secrets; a profile (e.g. `deploy`) may
+  // replace them with a superset that also carries deploy-time credentials.
+  // Split the two so we advertise only runtime keys for deploy forwarding.
+  const allPaths = resolvePaths(manifest.config, options.profile);
+  const basePaths = manifest.config.paths;
+  const runtimePaths = basePaths.filter((p) => allPaths.includes(p));
+  const deployOnlyPaths = allPaths.filter((p) => !runtimePaths.includes(p));
+
+  const provider = new RemoteProvider({
+    domain: config.infisicalDomain,
+    projectSlug,
+    identityId: options.identityId ?? process.env.INFISICAL_IDENTITY_ID,
+    clientId: options.clientId ?? process.env.INFISICAL_CLIENT_ID,
+    clientSecret: options.clientSecret ?? process.env.INFISICAL_CLIENT_SECRET,
+    oidcAudience:
+      process.env.INFISICAL_OIDC_AUDIENCE ?? config.auth?.oidcAudience,
+  });
+
+  for (const folder of allPaths) {
+    console.log(
+      `Loading Infisical path ${normalizeFolderPath(folder)} (${envName})`
+    );
+  }
+
+  // Two calls (runtime then deploy-only), reusing the cached access token, so we
+  // know which keys are runtime without per-folder provenance through the merge.
+  const runtimeSecrets = await fetchSecretsForPaths(
+    provider,
+    envName,
+    runtimePaths
+  );
+  const deployOnlySecrets = deployOnlyPaths.length
+    ? await fetchSecretsForPaths(provider, envName, deployOnlyPaths)
+    : {};
+
+  const merged = applyAliases(
+    { ...runtimeSecrets, ...deployOnlySecrets },
+    manifest.config
+  );
+  logMissingOptionalKeys(merged, resolveOptionalKeys(manifest.config, envName));
+  appendSecretsToGithubEnv(githubEnvPath, merged);
+
+  // Advertise CANONICAL (pre-alias) key names. Alias targets (e.g.
+  // NEXT_PUBLIC_*) are build-tool copies, not the names a server runtime reads,
+  // so they are intentionally not advertised — they still land in the job env
+  // via `merged` for build steps that need them.
+  runAdvertiseKeysHooks(githubEnvPath, config.hooks?.advertiseKeys, {
+    runtimeKeys: Object.keys(runtimeSecrets),
+    allKeys: Object.keys({ ...runtimeSecrets, ...deployOnlySecrets }),
+  });
+}

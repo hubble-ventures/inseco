@@ -1,0 +1,56 @@
+name: Load Infisical secrets (inseco)
+description: Fetch secrets from Infisical into the job environment via inseco export-gha (OIDC or universal auth)
+
+inputs:
+  package-id:
+    description: 'Package id from the inseco registry (e.g. app, api)'
+    required: true
+  environment:
+    description: 'Infisical environment slug (development, preview, production)'
+    required: true
+  profile:
+    description: 'Optional secrets.json profile (e.g. deploy, release)'
+    required: false
+    default: ''
+  project-slug:
+    description: 'Infisical project slug'
+    required: true
+  identity-id:
+    description: 'Machine identity ID for OIDC (preferred)'
+    required: false
+    default: ''
+  client-id:
+    description: 'Universal-auth client ID (fallback when identity-id empty)'
+    required: false
+    default: ''
+  client-secret:
+    description: 'Universal-auth client secret'
+    required: false
+    default: ''
+  oidc-audience:
+    description: 'OIDC audience (must match the identity bound audiences). Overrides inseco.config auth.oidcAudience.'
+    required: false
+    default: ''
+  inseco-version:
+    description: 'Version of the inseco npm package to run via npx'
+    required: false
+    default: 'latest'
+
+runs:
+  using: composite
+  steps:
+    - name: Load secrets into GITHUB_ENV
+      shell: bash
+      env:
+        INFISICAL_PROJECT_SLUG: ${{ inputs.project-slug }}
+        INFISICAL_IDENTITY_ID: ${{ inputs.identity-id }}
+        INFISICAL_CLIENT_ID: ${{ inputs.client-id }}
+        INFISICAL_CLIENT_SECRET: ${{ inputs.client-secret }}
+        INFISICAL_OIDC_AUDIENCE: ${{ inputs.oidc-audience }}
+        INFISICAL_ENV_SLUG: ${{ inputs.environment }}
+      run: |
+        args=(export-gha "${{ inputs.package-id }}" --env "${{ inputs.environment }}")
+        if [ -n "${{ inputs.profile }}" ]; then
+          args+=(--profile "${{ inputs.profile }}")
+        fi
+        npx --yes "inseco@${{ inputs.inseco-version }}" "${args[@]}"

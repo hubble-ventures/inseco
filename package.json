@@ -1,0 +1,62 @@
+{
+  "name": "inseco",
+  "version": "0.1.0",
+  "description": "Infisical Secret Orchestration — federated per-package secret manifests for monorepos, unified across local dev and CI.",
+  "keywords": [
+    "infisical",
+    "secrets",
+    "monorepo",
+    "dotenv",
+    "github-actions",
+    "ci",
+    "env"
+  ],
+  "license": "MIT",
+  "author": "Hubble Ventures",
+  "homepage": "https://github.com/hubble-ventures/inseco#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hubble-ventures/inseco.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hubble-ventures/inseco/issues"
+  },
+  "type": "module",
+  "bin": {
+    "inseco": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./schema": "./schema/secrets.schema.json"
+  },
+  "files": [
+    "dist",
+    "schema",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}
