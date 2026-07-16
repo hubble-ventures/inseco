@@ -1,6 +1,6 @@
 {
   "name": "inseco",
-  "version": "0.1.0",
+  "version": "0.1.3",
   "description": "Infisical Secret Orchestration — federated per-package secret manifests for monorepos, unified across local dev and CI.",
   "keywords": [
     "infisical",
