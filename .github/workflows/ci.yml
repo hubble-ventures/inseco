@@ -16,4 +16,12 @@ jobs:
       - run: npm ci
       - run: npm run type-check
       - run: npm run build
+      # dist/ is committed (git-URL consumers install without a build step).
+      # Fail if it drifted from source.
+      - name: Verify committed dist is up to date
+        run: |
+          if ! git diff --exit-status -- dist; then
+            echo "::error::dist/ is stale — run 'npm run build' and commit the result"
+            exit 1
+          fi
       - run: npm test
