@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   loadManifestJson,
+  resolveInclude,
   resolvePaths,
   resolveSecretsOutputPath,
 } from "../src/manifest.js";
@@ -42,6 +43,46 @@ describe("manifest", () => {
     expect(() => resolveSecretsOutputPath("/tmp/pkg", "../escape")).toThrow(
       /Invalid secrets output/
     );
+  });
+
+  it("loads an include allowlist at the root and per profile", () => {
+    const m = loadManifestJson({
+      paths: ["stripe"],
+      include: ["EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY"],
+      profiles: {
+        deploy: { paths: ["stripe", "fly"], include: ["STRIPE_SECRET_KEY"] },
+      },
+    });
+    expect(resolveInclude(m)).toEqual(["EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY"]);
+    expect(resolveInclude(m, "deploy")).toEqual(["STRIPE_SECRET_KEY"]);
+  });
+
+  it("a profile without include inherits the root include", () => {
+    const m = loadManifestJson({
+      paths: ["stripe"],
+      include: ["EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY"],
+      profiles: { deploy: { paths: ["stripe", "fly"] } },
+    });
+    expect(resolveInclude(m, "deploy")).toEqual([
+      "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY",
+    ]);
+  });
+
+  it("returns undefined when no include is set (emit all keys)", () => {
+    const m = loadManifestJson({ paths: ["stripe"] });
+    expect(resolveInclude(m)).toBeUndefined();
+  });
+
+  it("rejects an empty include array", () => {
+    expect(() =>
+      loadManifestJson({ paths: ["stripe"], include: [] })
+    ).toThrow();
+  });
+
+  it("rejects an invalid env var name in include", () => {
+    expect(() =>
+      loadManifestJson({ paths: ["stripe"], include: ["bad-name"] })
+    ).toThrow();
   });
 
   it("loads environments with optionalKeys", () => {

@@ -4,6 +4,21 @@ All notable changes to `inseco` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-07-16
+
+### Added
+
+- **Key-level `include` allowlist.** `secrets.json` can now emit only a chosen
+  subset of the keys a folder yields (default-deny key selection), so a client
+  package can pull a shared vendor folder but keep server secrets out of client
+  builds and `GITHUB_ENV`. Add `include` at the manifest root and/or per profile
+  (a profile's `include` replaces the root one). Applied **after** `aliases`, to
+  the final set of names. An `include` key that no folder produced fails the pull
+  / CI step unless it's listed in `environments.<slug>.optionalKeys` (downgraded
+  to a `::notice::`). Honored by `pull`, `export-gha`, `list`, `paths`, and
+  `validate`. Omitting `include` is fully backward compatible — every key is
+  emitted, as before. Published in the exported JSON Schema.
+
 ## [1.0.0] - 2026-07-16
 
 First public release. The `secrets.json` manifest contract and the
@@ -37,4 +52,5 @@ changes to either ship only in a new major.
 - **Published JSON Schema** for `secrets.json`, served from
   `https://cdn.jsdelivr.net/npm/@hubble-ventures/inseco@1/schema/secrets.schema.json`.
 
+[1.1.0]: https://github.com/hubble-ventures/inseco/releases/tag/v1.1.0
 [1.0.0]: https://github.com/hubble-ventures/inseco/releases/tag/v1.0.0

@@ -93,4 +93,46 @@ describe("pullManifest — output paths + multi-target aliases", () => {
     expect(parsed.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY).toBe("AIza-secret");
     expect(parsed.VITE_GOOGLE_MAPS_API_KEY).toBe("AIza-secret");
   });
+
+  it("writes only the allowlisted key when `include` is set", async () => {
+    // The /stripe folder holds a server secret and a public key; a client
+    // package emits only the public key — server secrets must not reach the
+    // client build's env.
+    await pullManifest({
+      manifest: manifest({
+        paths: ["stripe"],
+        output: ".env",
+        aliases: {
+          STRIPE_PUBLISHABLE_KEY: ["EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY"],
+        },
+        include: ["EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY"],
+      }),
+      repoRoot: dir,
+      envName: "development",
+      provider: fakeProvider({
+        STRIPE_SECRET_KEY: "sk_live",
+        STRIPE_PUBLISHABLE_KEY: "pk_live",
+      }),
+    });
+
+    const parsed = parseDotenv(readFileSync(join(dir, ".env"), "utf8"));
+    expect(parsed).toEqual({ EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_live" });
+    expect(parsed.STRIPE_SECRET_KEY).toBeUndefined();
+    expect(parsed.STRIPE_PUBLISHABLE_KEY).toBeUndefined();
+  });
+
+  it("fails the pull when `include` names a key no folder produced", async () => {
+    await expect(
+      pullManifest({
+        manifest: manifest({
+          paths: ["stripe"],
+          output: ".env",
+          include: ["NONEXISTENT_KEY"],
+        }),
+        repoRoot: dir,
+        envName: "development",
+        provider: fakeProvider({ STRIPE_SECRET_KEY: "sk_live" }),
+      })
+    ).rejects.toThrow(/NONEXISTENT_KEY/);
+  });
 });

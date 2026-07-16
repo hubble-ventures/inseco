@@ -7,12 +7,20 @@ export async function runList(cwd) {
     for (const { id, config: m } of manifests) {
         const paths = m.paths.map((p) => normalizeFolderPath(p)).join(", ");
         console.log(`  ${id}: ${paths}`);
+        if (m.include) {
+            console.log(`    include: ${m.include.join(", ")}`);
+        }
         if (m.profiles) {
             for (const [name, profile] of Object.entries(m.profiles)) {
                 const profilePaths = profile.paths
                     .map((p) => normalizeFolderPath(p))
                     .join(", ");
                 console.log(`    [${name}]: ${profilePaths}`);
+                // A profile include replaces the root include; show whichever applies.
+                const effective = profile.include ?? m.include;
+                if (effective) {
+                    console.log(`      include: ${effective.join(", ")}`);
+                }
             }
         }
     }
