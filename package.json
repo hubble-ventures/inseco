@@ -1,6 +1,6 @@
 {
   "name": "@hubble-ventures/inseco",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Infisical Secret Orchestration — federated per-package secret manifests for monorepos, unified across local dev and CI.",
   "keywords": [
     "infisical",

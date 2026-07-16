@@ -4,7 +4,12 @@ import { loadConfig } from "../config.js";
 import { normalizeEnvSlug } from "../env-slug.js";
 import { appendSecretsToGithubEnv } from "../github-env.js";
 import { runAdvertiseKeysHooks } from "../hooks.js";
-import { normalizeFolderPath, resolvePaths } from "../manifest.js";
+import { selectEmittedSecrets } from "../include.js";
+import {
+  normalizeFolderPath,
+  resolveInclude,
+  resolvePaths,
+} from "../manifest.js";
 import {
   logMissingOptionalKeys,
   resolveOptionalKeys,
@@ -83,19 +88,35 @@ export async function runExportGha(options: ExportGhaOptions): Promise<void> {
     ? await fetchSecretsForPaths(provider, envName, deployOnlyPaths)
     : {};
 
-  const merged = applyAliases(
+  const optionalKeys = resolveOptionalKeys(manifest.config, envName);
+  const aliased = applyAliases(
     { ...runtimeSecrets, ...deployOnlySecrets },
     manifest.config
   );
-  logMissingOptionalKeys(merged, resolveOptionalKeys(manifest.config, envName));
+  // Default-deny key selection: emit only the allowlisted keys when `include`
+  // is set. Absent = emit all.
+  const include = resolveInclude(manifest.config, options.profile);
+  // Notice missing optional keys against the pre-include set — a key present in
+  // the folders but filtered out by `include` isn't "missing". Skip keys the
+  // allowlist governs: those get a single notice from selectEmittedSecrets'
+  // unknown-key check, so we don't emit two notices for the same absent key.
+  const includeSet = new Set(include ?? []);
+  logMissingOptionalKeys(
+    aliased,
+    optionalKeys.filter((k) => !includeSet.has(k))
+  );
+  const merged = selectEmittedSecrets(aliased, include, optionalKeys);
   appendSecretsToGithubEnv(githubEnvPath, merged);
 
   // Advertise CANONICAL (pre-alias) key names. Alias targets (e.g.
   // NEXT_PUBLIC_*) are build-tool copies, not the names a server runtime reads,
   // so they are intentionally not advertised — they still land in the job env
-  // via `merged` for build steps that need them.
+  // via `merged` for build steps that need them. Drop any key `include`
+  // filtered out (a no-op when `include` is absent, since every fetched key is
+  // then in `merged`) so we never advertise a name not in the job env.
+  const emitted = (keys: string[]) => keys.filter((k) => merged[k] !== undefined);
   runAdvertiseKeysHooks(githubEnvPath, config.hooks?.advertiseKeys, {
-    runtimeKeys: Object.keys(runtimeSecrets),
-    allKeys: Object.keys({ ...runtimeSecrets, ...deployOnlySecrets }),
+    runtimeKeys: emitted(Object.keys(runtimeSecrets)),
+    allKeys: emitted(Object.keys({ ...runtimeSecrets, ...deployOnlySecrets })),
   });
 }

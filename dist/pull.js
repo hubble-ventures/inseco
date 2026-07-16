@@ -3,7 +3,9 @@ import { relative } from "node:path";
 import { applyAliases } from "./aliases.js";
 import { fetchSecretsForPaths, keysForCiStub, shouldSkipInfisicalPull, } from "./ci-skip.js";
 import { serializeDotenv } from "./dotenv.js";
-import { normalizeFolderPath, resolvePaths, resolveSecretsOutputPath, } from "./manifest.js";
+import { selectEmittedSecrets } from "./include.js";
+import { normalizeFolderPath, resolveInclude, resolvePaths, resolveSecretsOutputPath, } from "./manifest.js";
+import { resolveOptionalKeys } from "./optional-keys.js";
 export function writeInjectedSecretsStub(outputPath, manifest, keys) {
     const fromEnv = {};
     for (const key of keys) {
@@ -36,16 +38,22 @@ export async function pullManifest(options) {
         return "skipped";
     }
     const paths = resolvePaths(manifest.config, profile);
-    const merged = applyAliases(await fetchSecretsForPaths(provider, envName, paths), manifest.config);
-    // filter(Boolean) drops the optional Profile line when absent. It would also
-    // drop a trailing "" sentinel, so append the trailing newline explicitly —
-    // otherwise the first secret gets glued onto the "# Generated" line.
+    const aliased = applyAliases(await fetchSecretsForPaths(provider, envName, paths), manifest.config);
+    // Default-deny key selection: emit only the allowlisted keys when `include`
+    // is set (after aliases). Absent = emit all.
+    const include = resolveInclude(manifest.config, profile);
+    const merged = selectEmittedSecrets(aliased, include, resolveOptionalKeys(manifest.config, envName));
+    // filter(Boolean) drops the optional Profile/Include lines when absent. It
+    // would also drop a trailing "" sentinel, so append the trailing newline
+    // explicitly — otherwise the first secret gets glued onto the "# Generated"
+    // line.
     const header = `${[
         "# Pulled from Infisical — do not edit. Refresh: inseco pull",
         `# Package: ${manifest.id}`,
         `# Environment: ${envName}`,
         profile ? `# Profile: ${profile}` : "",
         `# Paths: ${paths.map((p) => normalizeFolderPath(p)).join(", ")}`,
+        include ? `# Include: ${include.join(", ")}` : "",
         `# Generated: ${new Date().toISOString()}`,
     ]
         .filter(Boolean)

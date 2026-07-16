@@ -15,6 +15,13 @@ const aliasTargetSchema = z
   .string()
   .regex(envVarNamePattern, "alias target must be a valid env var name");
 
+// Key-level allowlist. When present, only these env var names are emitted from
+// whatever the folders yielded (after aliases). `.min(1)` because an empty
+// allowlist is almost certainly a mistake — omit the field to emit every key.
+const includeSchema = z
+  .array(z.string().regex(envVarNamePattern, "include entry must be a valid env var name"))
+  .min(1, "include must be a non-empty array");
+
 export const secretsManifestSchema = z.object({
   $schema: z.string().optional(),
   paths: pathsSchema,
@@ -23,6 +30,9 @@ export const secretsManifestSchema = z.object({
       z.string(),
       z.object({
         paths: pathsSchema,
+        // Replaces the root `include` for this profile when set; if omitted,
+        // the root `include` applies (same replace-not-merge as `paths`).
+        include: includeSchema.optional(),
       })
     )
     .optional(),
@@ -48,6 +58,11 @@ export const secretsManifestSchema = z.object({
       z.union([aliasTargetSchema, z.array(aliasTargetSchema).min(1)])
     )
     .optional(),
+  // Emit only these keys from whatever the folders yielded (default-deny key
+  // selection). Applied after `aliases`, to the final set of names — so a client
+  // can pull a shared vendor folder but emit only its public key. Absent = emit
+  // all (backward compatible). A per-profile `include` replaces this one.
+  include: includeSchema.optional(),
   environments: z
     .record(
       z.string(),
@@ -77,6 +92,22 @@ export function resolvePaths(
     return profileConfig.paths;
   }
   return manifest.paths;
+}
+
+/**
+ * Resolve the effective key allowlist. A profile's `include` replaces the root
+ * `include` when the profile defines it; otherwise the root `include` applies.
+ * Returns `undefined` when no allowlist is in effect (emit all keys).
+ */
+export function resolveInclude(
+  manifest: SecretsManifest,
+  profile?: string
+): string[] | undefined {
+  if (profile) {
+    const profileInclude = manifest.profiles?.[profile]?.include;
+    if (profileInclude !== undefined) return profileInclude;
+  }
+  return manifest.include;
 }
 
 export function normalizeFolderPath(folder: string): string {

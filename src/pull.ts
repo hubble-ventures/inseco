@@ -7,11 +7,14 @@ import {
   shouldSkipInfisicalPull,
 } from "./ci-skip.js";
 import { serializeDotenv } from "./dotenv.js";
+import { selectEmittedSecrets } from "./include.js";
 import {
   normalizeFolderPath,
+  resolveInclude,
   resolvePaths,
   resolveSecretsOutputPath,
 } from "./manifest.js";
+import { resolveOptionalKeys } from "./optional-keys.js";
 import type { SecretsProvider } from "./providers/types.js";
 import type { PackageManifest } from "./registry.js";
 
@@ -81,20 +84,30 @@ export async function pullManifest(
   }
 
   const paths = resolvePaths(manifest.config, profile);
-  const merged = applyAliases(
+  const aliased = applyAliases(
     await fetchSecretsForPaths(provider, envName, paths),
     manifest.config
   );
+  // Default-deny key selection: emit only the allowlisted keys when `include`
+  // is set (after aliases). Absent = emit all.
+  const include = resolveInclude(manifest.config, profile);
+  const merged = selectEmittedSecrets(
+    aliased,
+    include,
+    resolveOptionalKeys(manifest.config, envName)
+  );
 
-  // filter(Boolean) drops the optional Profile line when absent. It would also
-  // drop a trailing "" sentinel, so append the trailing newline explicitly —
-  // otherwise the first secret gets glued onto the "# Generated" line.
+  // filter(Boolean) drops the optional Profile/Include lines when absent. It
+  // would also drop a trailing "" sentinel, so append the trailing newline
+  // explicitly — otherwise the first secret gets glued onto the "# Generated"
+  // line.
   const header = `${[
     "# Pulled from Infisical — do not edit. Refresh: inseco pull",
     `# Package: ${manifest.id}`,
     `# Environment: ${envName}`,
     profile ? `# Profile: ${profile}` : "",
     `# Paths: ${paths.map((p) => normalizeFolderPath(p)).join(", ")}`,
+    include ? `# Include: ${include.join(", ")}` : "",
     `# Generated: ${new Date().toISOString()}`,
   ]
     .filter(Boolean)

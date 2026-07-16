@@ -1,5 +1,5 @@
 import { loadConfig } from "../config.js";
-import { normalizeFolderPath, resolvePaths } from "../manifest.js";
+import { normalizeFolderPath, resolveInclude, resolvePaths, } from "../manifest.js";
 import { discoverManifests } from "../registry.js";
 export async function runPaths(options) {
     const config = await loadConfig(options.cwd);
@@ -10,6 +10,13 @@ export async function runPaths(options) {
     }
     const paths = resolvePaths(manifest.config, options.profile);
     const normalized = paths.map((p) => normalizeFolderPath(p));
+    // `paths` feeds the infisical CLI, which fetches whole folders — key-level
+    // `include` filtering happens later, in pull/export-gha. Warn on stderr so the
+    // filtering isn't invisible to someone reading only this folder list.
+    const include = resolveInclude(manifest.config, options.profile);
+    if (include) {
+        console.error(`# note: ${options.packageId} filters emitted keys to: ${include.join(", ")}`);
+    }
     if (options.comma) {
         console.log(normalized.map((p) => p.replace(/^\//, "")).join(","));
     }

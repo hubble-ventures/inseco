@@ -31,8 +31,15 @@ export {
   runAdvertiseKeysHooks,
 } from "./hooks.js";
 export {
+  applyInclude,
+  enforceIncludeKnown,
+  type IncludeResult,
+  selectEmittedSecrets,
+} from "./include.js";
+export {
   loadManifestJson,
   normalizeFolderPath,
+  resolveInclude,
   resolvePaths,
   resolveSecretsOutputPath,
   type SecretsManifest,
