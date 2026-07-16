@@ -76,8 +76,8 @@ jobs:
       - name: Publish to npm (trusted publishing, idempotent)
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          if npm view "inseco@$VERSION" version >/dev/null 2>&1; then
-            echo "inseco@$VERSION already on npm — skipping publish."
+          if npm view "@hubble-ventures/inseco@$VERSION" version >/dev/null 2>&1; then
+            echo "@hubble-ventures/inseco@$VERSION already on npm — skipping publish."
           else
             npm publish --access public --provenance
           fi

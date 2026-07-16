@@ -12,9 +12,9 @@ changes to either ship only in a new major.
 
 ### Added
 
-- **Published to npm as a public package** (`npm i -D inseco`,
-  `npx --yes inseco@latest`). Released via npm **trusted publishing** (OIDC) with
-  build provenance — no long-lived tokens.
+- **Published to npm as a public scoped package** (`npm i -D @hubble-ventures/inseco`,
+  `npx --yes @hubble-ventures/inseco@latest`). Released via npm **trusted publishing**
+  (OIDC) with build provenance — no long-lived tokens.
 - **Stable action ref.** `hubble-ventures/inseco/action@v1` is a floating major
   tag that tracks the latest `v1.x`; consumers may also pin a release SHA.
 - **CLI**: `pull`, `export-gha`, `list`, `validate`, `paths`, `run`.
@@ -35,6 +35,6 @@ changes to either ship only in a new major.
   (`environments.<slug>.optionalKeys`) that downgrade a missing key to a
   `::notice::` instead of failing CI.
 - **Published JSON Schema** for `secrets.json`, served from
-  `https://cdn.jsdelivr.net/npm/inseco@1/schema/secrets.schema.json`.
+  `https://cdn.jsdelivr.net/npm/@hubble-ventures/inseco@1/schema/secrets.schema.json`.
 
 [1.0.0]: https://github.com/hubble-ventures/inseco/releases/tag/v1.0.0

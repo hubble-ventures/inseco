@@ -19,7 +19,7 @@
 ## Install
 
 ```bash
-npm i -D inseco    # or pnpm add -D inseco
+npm i -D @hubble-ventures/inseco    # or pnpm add -D @hubble-ventures/inseco
 ```
 
 Requires the [`infisical` CLI](https://infisical.com/docs/cli/overview) for local pulls (`infisical login` once). CI needs no CLI — it uses the REST API.
@@ -29,7 +29,7 @@ Requires the [`infisical` CLI](https://infisical.com/docs/cli/overview) for loca
 1. Add an `inseco.config.ts` (or `.json`) at your monorepo root — this file marks the repo root:
 
    ```ts
-   import { defineConfig } from "inseco";
+   import { defineConfig } from "@hubble-ventures/inseco";
 
    export default defineConfig({
      projectIdEnvFile: ".env.infisical", // provides INFISICAL_PROJECT_ID
@@ -43,7 +43,7 @@ Requires the [`infisical` CLI](https://infisical.com/docs/cli/overview) for loca
 
    ```jsonc
    {
-     "$schema": "https://cdn.jsdelivr.net/npm/inseco@1/schema/secrets.schema.json",
+     "$schema": "https://cdn.jsdelivr.net/npm/@hubble-ventures/inseco@1/schema/secrets.schema.json",
      "paths": ["clerk", "posthog"],
      "output": ".env", // written next to this manifest; defaults to .env.secrets
      "aliases": {
@@ -116,7 +116,7 @@ jobs:
 
 Secrets are masked and appended to `GITHUB_ENV` for subsequent steps. Any configured `advertiseKeys` hook writes a plain, comma-separated list of runtime key **names** so a deploy step can forward exactly those. A full CI + deploy example is in [`examples/github-actions.yml`](./examples/github-actions.yml).
 
-**Pinning the action.** `@v1` is a floating major tag that always points at the latest `v1.x` release — it moves forward on each release but never across a breaking major. For a fully immutable pin, use a release SHA instead: `uses: hubble-ventures/inseco/action@<sha>`. The action shells out to `npx --yes inseco@latest`; pin the package too by passing `inseco-version:` (e.g. the same `1.x` version) if you want the CLI locked as well.
+**Pinning the action.** `@v1` is a floating major tag that always points at the latest `v1.x` release — it moves forward on each release but never across a breaking major. For a fully immutable pin, use a release SHA instead: `uses: hubble-ventures/inseco/action@<sha>`. The action shells out to `npx --yes @hubble-ventures/inseco@latest`; pin the package too by passing `inseco-version:` (e.g. the same `1.x` version) if you want the CLI locked as well.
 
 ## Local development
 
@@ -163,7 +163,7 @@ committed `.env.example`). Do **not** overwrite a committed sample with the pull
 ## Programmatic API
 
 ```ts
-import { loadConfig, discoverManifests, pullManifest, LocalProvider } from "inseco";
+import { loadConfig, discoverManifests, pullManifest, LocalProvider } from "@hubble-ventures/inseco";
 
 const config = await loadConfig();
 const provider = new LocalProvider({ projectId: config.projectId });
@@ -188,16 +188,20 @@ creates a GitHub Release from the matching [`CHANGELOG.md`](./CHANGELOG.md) sect
 moves the floating `v1` tag to the release commit. The publish step is idempotent — a
 version already on npm is skipped.
 
-> **First publish (one time).** npm trusted publishing must be configured against an
-> existing package, so the very first `inseco` publish reserves the name locally:
+> **First publish (one time).** The `@hubble-ventures` npm **organization** must exist,
+> and npm trusted publishing can only be configured against an *existing* package — so
+> the very first publish is done locally, by a member of the org with publish rights, to
+> create the package:
 >
 > ```bash
-> npm publish --access public   # run once, as an npm user with publish rights
+> npm publish --access public   # scoped packages default to private; --access public is required
 > ```
 >
-> Then, in the package's npm settings, add a **trusted publisher** for
-> `hubble-ventures/inseco` → workflow `release.yml`. Every subsequent tag push
-> publishes automatically with no token.
+> (`publishConfig.access: public` in `package.json` enforces this even if the flag is
+> omitted.) Then, in the package's npm settings, add a **trusted publisher** for
+> `hubble-ventures/inseco` → workflow `release.yml`, with **no environment** (the release
+> job sets none — the OIDC claims must match). Every subsequent tag push publishes
+> automatically with no token.
 
 ## Design
 

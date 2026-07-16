@@ -8,7 +8,7 @@ developer machine.
 ## One-time setup
 
 ```bash
-npm i -D inseco            # or pnpm add -D inseco
+npm i -D @hubble-ventures/inseco   # or pnpm add -D @hubble-ventures/inseco
 infisical login           # authenticate as yourself (opens a browser)
 ```
 
