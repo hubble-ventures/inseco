@@ -23,10 +23,17 @@ const rawSchema = z
 // `aliased`: canonical vault key -> the extra env var name(s) a build/runtime
 // expects (e.g. POSTHOG_PROJECT_TOKEN -> VITE_POSTHOG_KEY). The map key is the
 // real vault key (the alias *source*); the value is one or more alias targets.
-const aliasedSchema = z.record(
-  envVarNameSchema,
-  z.union([envVarNameSchema, z.array(envVarNameSchema).min(1)])
-);
+// Non-empty — an empty `aliased` bucket declares no keys, so it would compile to
+// nothing and silently fetch/write zero secrets for the folder; reject it to
+// match the JSON schema's `minProperties: 1` (omit the bucket instead).
+const aliasedSchema = z
+  .record(
+    envVarNameSchema,
+    z.union([envVarNameSchema, z.array(envVarNameSchema).min(1)])
+  )
+  .refine((aliases) => Object.keys(aliases).length > 0, {
+    message: "aliased must be a non-empty object of env var aliases",
+  });
 
 /** One alias target name, or several. */
 export type AliasSpec = string | string[];

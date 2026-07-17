@@ -101,6 +101,14 @@ describe("tree schema validation", () => {
     ).toThrow();
   });
 
+  it("rejects an empty aliased bucket", () => {
+    // A node with only `aliased: {}` is non-empty at the node level but declares
+    // no keys — it would compile to nothing and silently emit zero secrets.
+    expect(() =>
+      loadManifestJson({ tree: { stripe: { aliased: {} } } })
+    ).toThrow();
+  });
+
   it("rejects an invalid env var name in raw", () => {
     expect(() =>
       loadManifestJson({ tree: { stripe: { raw: ["bad-name"] } } })
