@@ -4,6 +4,64 @@ All notable changes to `infiscml` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-07-17
+
+### Changed (breaking — manifest format)
+
+- **The manifest is now a folder `tree`.** The flat `paths` + `include` +
+  `aliases` trio is replaced by a single `tree` that mirrors your Infisical
+  folder structure. Each of the three old fields was really an attribute of a
+  specific `(folder, key)` pair; the tree binds them together, so a key's
+  allowlist membership and its alias live in one place, provenance is explicit,
+  and the manifest reads like the vault. Within a folder, keys are declared in
+  two buckets — `raw` (plain keys) and `aliased` (`SOURCE → target | [targets]`)
+  — and `/`-prefixed children are **real subfolders** (nesting mirrors the vault
+  tree; `/sub` under `posthog` reads `/posthog/sub`).
+
+  ```jsonc
+  // before (v1)                          // after (v2)
+  {                                       {
+    "paths": ["posthog"],                   "tree": {
+    "aliases": {                              "posthog": {
+      "POSTHOG_PROJECT_TOKEN":                  "aliased": {
+        "VITE_POSTHOG_KEY"                        "POSTHOG_PROJECT_TOKEN": "VITE_POSTHOG_KEY"
+    },                                          }
+    "include": ["POSTHOG_PROJECT_TOKEN"]      }
+  }                                         }
+                                          }
+  ```
+
+- **Default-deny everywhere.** There is no wildcard: every emitted key must be
+  named, and an empty folder node is a schema error. The tree *is* the
+  allowlist, so the separate `include` field is **removed** — a folder emits
+  exactly the keys it declares, from that folder (provenance-aware selection).
+- **`fetch: "keys"` no longer needs an allowlist.** Because the tree always
+  names every canonical key (the `aliased` map key *is* the real vault key),
+  key mode requests those names directly — the v1 reverse-mapping from alias
+  target to source is gone, and `keys` is always satisfiable. The
+  `fetch`-requires-`include` cross-check is removed.
+- **Optional keys stay env-scoped** via `environments.<slug>.optionalKeys`
+  (unchanged), now referencing declared canonical key names.
+- **Profiles** carry an alternate `tree` (replacing the base tree when
+  `--profile` is set) plus an optional `fetch`; `profiles.<name>.paths` /
+  `.include` are gone.
+- **Programmatic API.** `resolvePaths` / `resolveInclude` / `applyInclude` /
+  `resolveFetchKeys` / `checkFetchIncludeConsistency` / `fetchManifestSecrets`
+  are replaced by `resolveCompiledFolders`, `compileTree`, and
+  `fetchCompiledSecrets`; `enforceIncludeKnown` is renamed `enforceKnownKeys`.
+  New exports: `compileTree`, `treeSchema`, and the `CompiledFolder` /
+  `CompiledKey` / `FolderNode` / `SecretsTree` / `AliasSpec` types.
+- **Schema** rewritten around `tree` and published at `@2`.
+
+### Migration
+
+Convert each `secrets.json`: turn every `paths` entry into a `tree` folder;
+move `aliases` sources into that folder's `aliased` bucket; put remaining
+`include` (or all wanted) keys into `raw`. Point `$schema` at `…/infiscml@2/…`.
+Behavior note: an `aliased` key now emits **both** its canonical name and the
+alias target(s) — v1 could suppress the canonical via `include`; v2 does not
+(the security boundary is default-deny provenance, not alias suppression).
+
 ## [1.2.0] - 2026-07-16
 
 ### Added

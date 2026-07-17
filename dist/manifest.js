@@ -1,39 +1,24 @@
 import { resolve, sep } from "node:path";
 import { z } from "zod";
-const pathPattern = /^[a-z0-9_/-]+$/;
-const pathsSchema = z
-    .array(z.string().regex(pathPattern))
-    .min(1, "paths must be a non-empty array");
-const envVarNamePattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const aliasSourceSchema = z
-    .string()
-    .regex(envVarNamePattern, "alias source must be a valid env var name");
-const aliasTargetSchema = z
-    .string()
-    .regex(envVarNamePattern, "alias target must be a valid env var name");
-// Key-level allowlist. When present, only these env var names are emitted from
-// whatever the folders yielded (after aliases). `.min(1)` because an empty
-// allowlist is almost certainly a mistake — omit the field to emit every key.
-const includeSchema = z
-    .array(z.string().regex(envVarNamePattern, "include entry must be a valid env var name"))
-    .min(1, "include must be a non-empty array");
+import { compileTree, treeSchema, } from "./tree.js";
 // How secrets are read from the vault. `folder` (default) fetches whole folders
-// and filters locally. `keys` fetches only the exact keys `include` resolves to,
-// so the vault never transmits the rest — wire-level least privilege. `keys`
-// requires an `include` allowlist (enforced by resolveFetchKeys / validate,
-// since the requirement depends on the resolved profile).
+// and selects the declared keys locally. `keys` fetches only the exact keys the
+// tree declares, so the vault never transmits the rest — wire-level least
+// privilege. Because the tree always names every key, `keys` needs no separate
+// allowlist (unlike v1, where it required `include`).
 const fetchModeSchema = z.enum(["folder", "keys"]);
 export const secretsManifestSchema = z.object({
     $schema: z.string().optional(),
-    paths: pathsSchema,
+    // The folder tree: which Infisical folders to pull and, per folder, exactly
+    // which keys to emit (`raw`) and how to alias them (`aliased`). Subfolders
+    // nest via `/`-prefixed children. See tree.ts for the node grammar.
+    tree: treeSchema,
     profiles: z
         .record(z.string(), z.object({
-        paths: pathsSchema,
-        // Replaces the root `include` for this profile when set; if omitted,
-        // the root `include` applies (same replace-not-merge as `paths`).
-        include: includeSchema.optional(),
-        // Overrides the root `fetch` for this profile when set (same
-        // replace-not-merge as `paths` / `include`).
+        // Replaces the root `tree` for this profile when running with
+        // --profile (same replace-not-merge as v1 `paths`).
+        tree: treeSchema,
+        // Overrides the root `fetch` for this profile when set.
         fetch: fetchModeSchema.optional(),
     }))
         .optional(),
@@ -47,23 +32,9 @@ export const secretsManifestSchema = z.object({
         .string()
         .regex(/^[^/\\]+$/)
         .optional(),
-    // Map a pulled secret to the extra env var name(s) a build/runtime expects.
-    // The vault names a secret once (e.g. /clerk exposes the publishable key as
-    // CLERK_PUBLISHABLE_KEY), but build tools inline it by a tool-specific,
-    // convention-prefixed name — Vite reads VITE_*, Next reads NEXT_PUBLIC_*.
-    // Declaring the mapping here means every consumer (CI export-gha, local pull)
-    // emits the right name instead of each workflow re-deriving it.
-    aliases: z
-        .record(aliasSourceSchema, z.union([aliasTargetSchema, z.array(aliasTargetSchema).min(1)]))
-        .optional(),
-    // Emit only these keys from whatever the folders yielded (default-deny key
-    // selection). Applied after `aliases`, to the final set of names — so a client
-    // can pull a shared vendor folder but emit only its public key. Absent = emit
-    // all (backward compatible). A per-profile `include` replaces this one.
-    include: includeSchema.optional(),
-    // Read strategy: `folder` (default) pulls whole folders and filters locally;
-    // `keys` pulls only the keys `include` resolves to (least privilege at the
-    // wire). A per-profile `fetch` replaces this one.
+    // Read strategy: `folder` (default) pulls whole folders and selects the
+    // declared keys locally; `keys` pulls only the declared keys (least privilege
+    // at the wire). A per-profile `fetch` replaces this one.
     fetch: fetchModeSchema.optional(),
     environments: z
         .record(z.string(), z.object({
@@ -74,34 +45,25 @@ export const secretsManifestSchema = z.object({
 export function loadManifestJson(raw) {
     return secretsManifestSchema.parse(raw);
 }
-/** Profile paths replace default paths when a profile is set. */
-export function resolvePaths(manifest, profile) {
+/**
+ * Compile the effective folder tree into an ordered {@link CompiledFolder} list.
+ * A profile's `tree` replaces the root `tree` when a profile is set (same
+ * replace-not-merge as v1 `paths`). Throws on an unknown profile name.
+ */
+export function resolveCompiledFolders(manifest, profile) {
     if (profile) {
         const profileConfig = manifest.profiles?.[profile];
         if (!profileConfig) {
             throw new Error(`Unknown profile '${profile}' in secrets.json`);
         }
-        return profileConfig.paths;
+        return compileTree(profileConfig.tree);
     }
-    return manifest.paths;
-}
-/**
- * Resolve the effective key allowlist. A profile's `include` replaces the root
- * `include` when the profile defines it; otherwise the root `include` applies.
- * Returns `undefined` when no allowlist is in effect (emit all keys).
- */
-export function resolveInclude(manifest, profile) {
-    if (profile) {
-        const profileInclude = manifest.profiles?.[profile]?.include;
-        if (profileInclude !== undefined)
-            return profileInclude;
-    }
-    return manifest.include;
+    return compileTree(manifest.tree);
 }
 /**
  * Resolve the effective fetch mode. A profile's `fetch` replaces the root
  * `fetch` when the profile defines it; otherwise the root `fetch` applies.
- * Defaults to `"folder"` (whole-folder read + local filter) when unset.
+ * Defaults to `"folder"` (whole-folder read + local select) when unset.
  */
 export function resolveFetchMode(manifest, profile) {
     if (profile) {
@@ -110,28 +72,6 @@ export function resolveFetchMode(manifest, profile) {
             return profileFetch;
     }
     return manifest.fetch ?? "folder";
-}
-/**
- * Cross-field rule: `fetch: "keys"` requires an `include` allowlist, because
- * key mode fetches exactly the keys `include` names. The check spans the root
- * and every profile (a profile's `fetch`/`include` each replace the root's), so
- * every runnable combination is covered. Returns human-readable issue strings
- * (empty when consistent) for `validate` to surface. Zod can't express this —
- * the requirement depends on the resolved profile.
- */
-export function checkFetchIncludeConsistency(manifest) {
-    const issues = [];
-    const check = (profile, label) => {
-        if (resolveFetchMode(manifest, profile) === "keys" &&
-            resolveInclude(manifest, profile) === undefined) {
-            issues.push(`fetch: "keys" requires an include allowlist (${label})`);
-        }
-    };
-    check(undefined, "root");
-    for (const name of Object.keys(manifest.profiles ?? {})) {
-        check(name, `profile "${name}"`);
-    }
-    return issues;
 }
 export function normalizeFolderPath(folder) {
     return `/${folder.replace(/^\/+/, "")}`;

@@ -1,15 +1,22 @@
-import type { SecretsManifest } from "./manifest.js";
+import type { CompiledFolder } from "./tree.js";
 
 export type ResolvedAlias = { source: string; targets: string[] };
 
-/** Normalize the manifest's alias map to a list of {source, targets[]}. */
-export function resolveAliases(manifest: SecretsManifest): ResolvedAlias[] {
-  const aliases = manifest.aliases;
-  if (!aliases) return [];
-  return Object.entries(aliases).map(([source, value]) => ({
-    source,
-    targets: Array.isArray(value) ? value : [value],
-  }));
+/**
+ * Collect the alias `source -> targets` pairs from the compiled folders. Each
+ * `aliased` entry in the tree names a canonical vault key (the source) and the
+ * extra env var name(s) a build/runtime expects (the targets).
+ */
+export function resolveAliases(folders: CompiledFolder[]): ResolvedAlias[] {
+  const out: ResolvedAlias[] = [];
+  for (const folder of folders) {
+    for (const key of folder.keys) {
+      if (key.aliases.length > 0) {
+        out.push({ source: key.key, targets: key.aliases });
+      }
+    }
+  }
+  return out;
 }
 
 /**
@@ -17,7 +24,9 @@ export function resolveAliases(manifest: SecretsManifest): ResolvedAlias[] {
  *
  * Used wherever the CLI materializes secrets (CI `export-gha`, local
  * `.env.secrets` pull) so the conventional, tool-specific name each deployment
- * expects is always present — see the `aliases` doc in manifest.ts.
+ * expects is always present — the vault names a secret once (e.g. /posthog
+ * exposes POSTHOG_PROJECT_TOKEN), but build tools inline it by a tool-specific
+ * name (Vite reads VITE_*, Next reads NEXT_PUBLIC_*).
  *
  * Returns a new object. An absent source is skipped, and an existing target (a
  * real secret of that name) is never overwritten, so real values win over
@@ -25,10 +34,10 @@ export function resolveAliases(manifest: SecretsManifest): ResolvedAlias[] {
  */
 export function applyAliases(
   merged: Record<string, string>,
-  manifest: SecretsManifest
+  folders: CompiledFolder[]
 ): Record<string, string> {
   const out = { ...merged };
-  for (const { source, targets } of resolveAliases(manifest)) {
+  for (const { source, targets } of resolveAliases(folders)) {
     const value = merged[source];
     if (value === undefined) continue;
     for (const target of targets) {

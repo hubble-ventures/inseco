@@ -1,10 +1,6 @@
-import { resolveFetchKeys } from "./include.js";
-import {
-  resolveFetchMode,
-  resolveInclude,
-  type SecretsManifest,
-} from "./manifest.js";
+import type { SecretsManifest } from "./manifest.js";
 import type { SecretsProvider } from "./providers/types.js";
+import type { CompiledFolder } from "./tree.js";
 
 export type { SecretsProvider };
 
@@ -18,76 +14,39 @@ export function mergeFolderSecrets(
   return merged;
 }
 
-export async function fetchSecretsForPaths(
-  provider: SecretsProvider,
-  envName: string,
-  paths: string[]
-): Promise<Record<string, string>> {
-  const chunks: Record<string, string>[] = [];
-  for (const folder of paths) {
-    chunks.push(await provider.exportFolder(envName, folder));
-  }
-  return mergeFolderSecrets(chunks);
-}
-
 /**
- * `fetch: "keys"` counterpart to {@link fetchSecretsForPaths}: request only the
- * given canonical keys from each folder and merge. A key absent from one folder
- * is simply not returned by that folder; the merge (last folder wins, matching
- * the folder path) collects it from whichever folder holds it.
- */
-export async function fetchSecretsForKeys(
-  provider: SecretsProvider,
-  envName: string,
-  paths: string[],
-  keys: string[]
-): Promise<Record<string, string>> {
-  const chunks: Record<string, string>[] = [];
-  for (const folder of paths) {
-    chunks.push(await provider.exportKeys(envName, folder, keys));
-  }
-  return mergeFolderSecrets(chunks);
-}
-
-/**
- * Fetch a manifest's secrets for the given folder set, honoring its resolved
- * `fetch` mode: `keys` requests only the canonical keys `include` resolves to
- * (least privilege at the wire), `folder` reads whole folders. `keys` requires
- * an `include` allowlist — the whole point is to name exactly what to fetch.
+ * Fetch a manifest's secrets from its compiled folders, honoring the resolved
+ * `fetch` mode, and select each folder's declared keys from *that* folder
+ * (provenance-aware). `keys` mode requests only the declared keys per folder
+ * (the tree names the exact canonical vault keys, so no allowlist reverse-map is
+ * needed — the alias *source* is the real key); `folder` mode reads the whole
+ * folder and picks the declared keys locally. Folders merge in tree order, so a
+ * genuine cross-folder name collision resolves last-wins.
  *
- * Callers pass an explicit `paths` subset (export-gha splits runtime vs
- * deploy-only) rather than re-deriving it, so the runtime/deploy provenance the
- * caller already computed is preserved.
+ * Callers pass an explicit `folders` subset (export-gha splits runtime vs
+ * deploy-only) rather than re-deriving it, so the provenance the caller already
+ * computed is preserved.
  */
-export async function fetchManifestSecrets(
+export async function fetchCompiledSecrets(
   provider: SecretsProvider,
   envName: string,
-  paths: string[],
-  manifest: SecretsManifest,
-  profile?: string
+  folders: CompiledFolder[],
+  fetchMode: "folder" | "keys"
 ): Promise<Record<string, string>> {
-  if (resolveFetchMode(manifest, profile) === "keys") {
-    const include = resolveInclude(manifest, profile);
-    if (!include) {
-      // resolveInclude already checked the profile then the root, so name the
-      // exact place(s) that need an `include` rather than a vague "root or
-      // profile" — the user should add it to whichever they're running.
-      const where = profile
-        ? `neither profile "${profile}" nor the manifest root defines one`
-        : "the manifest root does not define one";
-      throw new Error(
-        `fetch: "keys" requires an include allowlist, but ${where}. ` +
-          "Add `include: [...]` naming exactly which keys to request from the vault."
-      );
+  const chunks: Record<string, string>[] = [];
+  for (const folder of folders) {
+    const declared = folder.keys.map((k) => k.key);
+    const raw =
+      fetchMode === "keys"
+        ? await provider.exportKeys(envName, folder.path, declared)
+        : await provider.exportFolder(envName, folder.path);
+    const selected: Record<string, string> = {};
+    for (const key of declared) {
+      if (key in raw) selected[key] = raw[key];
     }
-    return fetchSecretsForKeys(
-      provider,
-      envName,
-      paths,
-      resolveFetchKeys(include, manifest)
-    );
+    chunks.push(selected);
   }
-  return fetchSecretsForPaths(provider, envName, paths);
+  return mergeFolderSecrets(chunks);
 }
 
 export function isCi(): boolean {

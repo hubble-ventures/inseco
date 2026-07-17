@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { loadConfig } from "../config.js";
 import { normalizeEnvSlug } from "../env-slug.js";
-import { normalizeFolderPath, resolvePaths } from "../manifest.js";
+import { normalizeFolderPath, resolveCompiledFolders } from "../manifest.js";
 import { discoverManifests } from "../registry.js";
 
 export type RunOptions = {
@@ -31,8 +31,11 @@ export async function runExec(options: RunOptions): Promise<number> {
     return result.status ?? 1;
   }
 
-  const paths = resolvePaths(manifest.config, options.profile);
-  const pathFlags = paths.flatMap((p) => ["--path", normalizeFolderPath(p)]);
+  const folders = resolveCompiledFolders(manifest.config, options.profile);
+  const pathFlags = folders.flatMap((f) => [
+    "--path",
+    normalizeFolderPath(f.path),
+  ]);
 
   const result = spawnSync(
     "infisical",

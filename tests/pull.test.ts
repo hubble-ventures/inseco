@@ -70,7 +70,7 @@ describe("pullManifest — output paths + multi-target aliases", () => {
 
   it("writes the default .env.secrets when no output is set", async () => {
     const result = await pullManifest({
-      manifest: manifest({ paths: ["clerk"] }),
+      manifest: manifest({ tree: { clerk: { raw: ["CLERK_PUBLISHABLE_KEY"] } } }),
       repoRoot: dir,
       envName: "development",
       provider: fakeProvider({ CLERK_PUBLISHABLE_KEY: "pk_live" }),
@@ -80,11 +80,11 @@ describe("pullManifest — output paths + multi-target aliases", () => {
   });
 
   it("writes to a custom per-package output filename", async () => {
-    // The monorepo writes distinct filenames per package (root `.env.local`,
-    // `apps/backend/.env`, ...). Each manifest sits in its own dir; `output`
-    // selects the filename written there.
     await pullManifest({
-      manifest: manifest({ paths: ["clerk"], output: ".env.local" }),
+      manifest: manifest({
+        tree: { clerk: { raw: ["CLERK_PUBLISHABLE_KEY"] } },
+        output: ".env.local",
+      }),
       repoRoot: dir,
       envName: "development",
       provider: fakeProvider({ CLERK_PUBLISHABLE_KEY: "pk_live" }),
@@ -99,7 +99,10 @@ describe("pullManifest — output paths + multi-target aliases", () => {
 
   it("supports `output: .env` (no separators, dotfile) for an app package", async () => {
     await pullManifest({
-      manifest: manifest({ paths: ["clerk"], output: ".env" }),
+      manifest: manifest({
+        tree: { clerk: { raw: ["CLERK_PUBLISHABLE_KEY"] } },
+        output: ".env",
+      }),
       repoRoot: dir,
       envName: "development",
       provider: fakeProvider({ CLERK_PUBLISHABLE_KEY: "pk_live" }),
@@ -111,14 +114,17 @@ describe("pullManifest — output paths + multi-target aliases", () => {
     // GOOGLE_MAPS_API_KEY -> both EXPO_PUBLIC_* and VITE_* in a single output.
     await pullManifest({
       manifest: manifest({
-        paths: ["google"],
-        output: ".env",
-        aliases: {
-          GOOGLE_MAPS_API_KEY: [
-            "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY",
-            "VITE_GOOGLE_MAPS_API_KEY",
-          ],
+        tree: {
+          google: {
+            aliased: {
+              GOOGLE_MAPS_API_KEY: [
+                "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY",
+                "VITE_GOOGLE_MAPS_API_KEY",
+              ],
+            },
+          },
         },
+        output: ".env",
       }),
       repoRoot: dir,
       envName: "development",
@@ -131,18 +137,20 @@ describe("pullManifest — output paths + multi-target aliases", () => {
     expect(parsed.VITE_GOOGLE_MAPS_API_KEY).toBe("AIza-secret");
   });
 
-  it("writes only the allowlisted key when `include` is set", async () => {
-    // The /stripe folder holds a server secret and a public key; a client
-    // package emits only the public key — server secrets must not reach the
-    // client build's env.
+  it("emits only the declared keys from a multi-key folder", async () => {
+    // The /stripe folder holds a server secret and a publishable key; a client
+    // package declares only the publishable key (aliased) — the server secret
+    // is undeclared and must never reach the client build's env.
     await pullManifest({
       manifest: manifest({
-        paths: ["stripe"],
-        output: ".env",
-        aliases: {
-          STRIPE_PUBLISHABLE_KEY: ["EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY"],
+        tree: {
+          stripe: {
+            aliased: {
+              STRIPE_PUBLISHABLE_KEY: ["EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY"],
+            },
+          },
         },
-        include: ["EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY"],
+        output: ".env",
       }),
       repoRoot: dir,
       envName: "development",
@@ -153,18 +161,21 @@ describe("pullManifest — output paths + multi-target aliases", () => {
     });
 
     const parsed = parseDotenv(readFileSync(join(dir, ".env"), "utf8"));
-    expect(parsed).toEqual({ EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_live" });
+    // The declared canonical key AND its alias target both emit; the undeclared
+    // server secret does not.
+    expect(parsed).toEqual({
+      STRIPE_PUBLISHABLE_KEY: "pk_live",
+      EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_live",
+    });
     expect(parsed.STRIPE_SECRET_KEY).toBeUndefined();
-    expect(parsed.STRIPE_PUBLISHABLE_KEY).toBeUndefined();
   });
 
-  it("fails the pull when `include` names a key no folder produced", async () => {
+  it("fails the pull when the tree declares a key no folder produced", async () => {
     await expect(
       pullManifest({
         manifest: manifest({
-          paths: ["stripe"],
+          tree: { stripe: { raw: ["NONEXISTENT_KEY"] } },
           output: ".env",
-          include: ["NONEXISTENT_KEY"],
         }),
         repoRoot: dir,
         envName: "development",
@@ -173,18 +184,35 @@ describe("pullManifest — output paths + multi-target aliases", () => {
     ).rejects.toThrow(/NONEXISTENT_KEY/);
   });
 
+  it("allows a declared key to be absent when it is optional for the env", async () => {
+    // STRIPE_WEBHOOK_SECRET is declared but not present; optionalKeys downgrades
+    // the miss to a notice rather than failing the pull.
+    const result = await pullManifest({
+      manifest: manifest({
+        tree: { stripe: { raw: ["STRIPE_PUBLISHABLE_KEY", "STRIPE_WEBHOOK_SECRET"] } },
+        output: ".env",
+        environments: { development: { optionalKeys: ["STRIPE_WEBHOOK_SECRET"] } },
+      }),
+      repoRoot: dir,
+      envName: "development",
+      provider: fakeProvider({ STRIPE_PUBLISHABLE_KEY: "pk_live" }),
+    });
+    expect(result).toBe("pulled");
+    const parsed = parseDotenv(readFileSync(join(dir, ".env"), "utf8"));
+    expect(parsed).toEqual({ STRIPE_PUBLISHABLE_KEY: "pk_live" });
+  });
+
   describe("fetch: keys (wire-level least privilege)", () => {
-    it("requests only the include keys and never reads whole folders", async () => {
+    it("requests only the declared keys and never reads whole folders", async () => {
       const rec = recordingProvider({
         STRIPE_SECRET_KEY: "sk_live",
         STRIPE_PUBLISHABLE_KEY: "pk_live",
       });
       await pullManifest({
         manifest: manifest({
-          paths: ["stripe"],
+          tree: { stripe: { raw: ["STRIPE_PUBLISHABLE_KEY"] } },
           output: ".env",
           fetch: "keys",
-          include: ["STRIPE_PUBLISHABLE_KEY"],
         }),
         repoRoot: dir,
         envName: "development",
@@ -199,20 +227,22 @@ describe("pullManifest — output paths + multi-target aliases", () => {
       expect(rec.folderReads).toBe(0);
     });
 
-    it("reverse-maps an aliased include target to fetch its canonical source", async () => {
+    it("fetches the canonical aliased source (the real vault key)", async () => {
       const rec = recordingProvider({
         STRIPE_PUBLISHABLE_KEY: "pk_live",
         STRIPE_SECRET_KEY: "sk_live",
       });
       await pullManifest({
         manifest: manifest({
-          paths: ["stripe"],
+          tree: {
+            stripe: {
+              aliased: {
+                STRIPE_PUBLISHABLE_KEY: ["EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY"],
+              },
+            },
+          },
           output: ".env",
           fetch: "keys",
-          aliases: {
-            STRIPE_PUBLISHABLE_KEY: ["EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY"],
-          },
-          include: ["EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY"],
         }),
         repoRoot: dir,
         envName: "development",
@@ -220,35 +250,22 @@ describe("pullManifest — output paths + multi-target aliases", () => {
       });
 
       const parsed = parseDotenv(readFileSync(join(dir, ".env"), "utf8"));
-      expect(parsed).toEqual({ EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_live" });
-      // Fetched the canonical source (the alias target isn't a real vault key).
-      expect(rec.requestedKeys).toContain("STRIPE_PUBLISHABLE_KEY");
+      expect(parsed).toEqual({
+        STRIPE_PUBLISHABLE_KEY: "pk_live",
+        EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_live",
+      });
+      // The aliased map key IS the canonical vault key — requested directly.
+      expect(rec.requestedKeys).toEqual(["STRIPE_PUBLISHABLE_KEY"]);
       expect(rec.requestedKeys).not.toContain("STRIPE_SECRET_KEY");
     });
 
-    it("throws when fetch: keys is set without an include allowlist", async () => {
+    it("still fails when a declared key exists in no folder", async () => {
       await expect(
         pullManifest({
           manifest: manifest({
-            paths: ["stripe"],
+            tree: { stripe: { raw: ["NONEXISTENT_KEY"] } },
             output: ".env",
             fetch: "keys",
-          }),
-          repoRoot: dir,
-          envName: "development",
-          provider: fakeProvider({ STRIPE_SECRET_KEY: "sk_live" }),
-        })
-      ).rejects.toThrow(/requires an include allowlist/);
-    });
-
-    it("still fails when an include key exists in no folder", async () => {
-      await expect(
-        pullManifest({
-          manifest: manifest({
-            paths: ["stripe"],
-            output: ".env",
-            fetch: "keys",
-            include: ["NONEXISTENT_KEY"],
           }),
           repoRoot: dir,
           envName: "development",

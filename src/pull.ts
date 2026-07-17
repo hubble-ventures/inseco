@@ -2,7 +2,7 @@ import { existsSync, writeFileSync } from "node:fs";
 import { relative } from "node:path";
 import { applyAliases } from "./aliases.js";
 import {
-  fetchManifestSecrets,
+  fetchCompiledSecrets,
   keysForCiStub,
   shouldSkipInfisicalPull,
 } from "./ci-skip.js";
@@ -10,9 +10,8 @@ import { serializeDotenv } from "./dotenv.js";
 import { selectEmittedSecrets } from "./include.js";
 import {
   normalizeFolderPath,
+  resolveCompiledFolders,
   resolveFetchMode,
-  resolveInclude,
-  resolvePaths,
   resolveSecretsOutputPath,
 } from "./manifest.js";
 import { resolveOptionalKeys } from "./optional-keys.js";
@@ -84,33 +83,33 @@ export async function pullManifest(
     return "skipped";
   }
 
-  const paths = resolvePaths(manifest.config, profile);
+  const folders = resolveCompiledFolders(manifest.config, profile);
   const fetchMode = resolveFetchMode(manifest.config, profile);
   const aliased = applyAliases(
-    await fetchManifestSecrets(provider, envName, paths, manifest.config, profile),
-    manifest.config
+    await fetchCompiledSecrets(provider, envName, folders, fetchMode),
+    folders
   );
-  // Default-deny key selection: emit only the allowlisted keys when `include`
-  // is set (after aliases). Absent = emit all.
-  const include = resolveInclude(manifest.config, profile);
+  // The fetch already selected exactly the declared keys per folder; this only
+  // enforces that every declared canonical key was produced (unless optional).
+  const declaredKeys = [
+    ...new Set(folders.flatMap((f) => f.keys.map((k) => k.key))),
+  ];
   const merged = selectEmittedSecrets(
     aliased,
-    include,
+    declaredKeys,
     resolveOptionalKeys(manifest.config, envName)
   );
 
-  // filter(Boolean) drops the optional Profile/Include lines when absent. It
-  // would also drop a trailing "" sentinel, so append the trailing newline
-  // explicitly — otherwise the first secret gets glued onto the "# Generated"
-  // line.
+  // filter(Boolean) drops the optional Profile line when absent. It would also
+  // drop a trailing "" sentinel, so append the trailing newline explicitly —
+  // otherwise the first secret gets glued onto the "# Generated" line.
   const header = `${[
     "# Pulled from Infisical — do not edit. Refresh: infiscml pull",
     `# Package: ${manifest.id}`,
     `# Environment: ${envName}`,
     profile ? `# Profile: ${profile}` : "",
-    `# Paths: ${paths.map((p) => normalizeFolderPath(p)).join(", ")}`,
+    `# Paths: ${folders.map((f) => normalizeFolderPath(f.path)).join(", ")}`,
     fetchMode === "keys" ? "# Fetch: keys (per-key least-privilege read)" : "",
-    include ? `# Include: ${include.join(", ")}` : "",
     `# Generated: ${new Date().toISOString()}`,
   ]
     .filter(Boolean)

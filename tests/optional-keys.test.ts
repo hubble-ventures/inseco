@@ -8,7 +8,7 @@ import {
 describe("optional keys", () => {
   it("resolves optional keys for an environment", () => {
     const manifest = loadManifestJson({
-      paths: ["clerk"],
+      tree: { clerk: { raw: ["CLERK_WEBHOOK_SIGNING_SECRET"] } },
       environments: {
         preview: {
           optionalKeys: ["CLERK_WEBHOOK_SIGNING_SECRET"],

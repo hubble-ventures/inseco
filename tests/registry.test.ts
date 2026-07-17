@@ -27,8 +27,8 @@ describe("config + registry", () => {
   it("derives package id from the roots child directory name", async () => {
     const config = await loadConfig(fixtureRepo);
     const web = discoverManifests(config).find((m) => m.id === "web");
-    expect(web?.config.paths).toEqual(["clerk", "posthog"]);
-    expect(web?.config.aliases?.CLERK_PUBLISHABLE_KEY).toBe(
+    expect(Object.keys(web?.config.tree ?? {})).toEqual(["clerk", "posthog"]);
+    expect(web?.config.tree.clerk.aliased?.CLERK_PUBLISHABLE_KEY).toBe(
       "VITE_CLERK_PUBLISHABLE_KEY"
     );
   });

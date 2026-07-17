@@ -4,7 +4,7 @@ export {
   resolveAliases,
 } from "./aliases.js";
 export {
-  fetchSecretsForPaths,
+  fetchCompiledSecrets,
   isCi,
   keysForCiStub,
   mergeFolderSecrets,
@@ -30,17 +30,12 @@ export {
   keysForScope,
   runAdvertiseKeysHooks,
 } from "./hooks.js";
-export {
-  applyInclude,
-  enforceIncludeKnown,
-  type IncludeResult,
-  selectEmittedSecrets,
-} from "./include.js";
+export { enforceKnownKeys, selectEmittedSecrets } from "./include.js";
 export {
   loadManifestJson,
   normalizeFolderPath,
-  resolveInclude,
-  resolvePaths,
+  resolveCompiledFolders,
+  resolveFetchMode,
   resolveSecretsOutputPath,
   type SecretsManifest,
   secretsManifestSchema,
@@ -58,3 +53,12 @@ export {
   writeInjectedSecretsStub,
 } from "./pull.js";
 export { discoverManifests, type PackageManifest } from "./registry.js";
+export {
+  type AliasSpec,
+  type CompiledFolder,
+  type CompiledKey,
+  compileTree,
+  type FolderNode,
+  type SecretsTree,
+  treeSchema,
+} from "./tree.js";

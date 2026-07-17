@@ -1,9 +1,8 @@
 import { loadConfig } from "../config.js";
 import {
   normalizeFolderPath,
+  resolveCompiledFolders,
   resolveFetchMode,
-  resolveInclude,
-  resolvePaths,
 } from "../manifest.js";
 import { discoverManifests } from "../registry.js";
 
@@ -22,21 +21,20 @@ export async function runPaths(options: PathsOptions): Promise<void> {
     throw new Error(`Unknown package id: ${options.packageId}`);
   }
 
-  const paths = resolvePaths(manifest.config, options.profile);
-  const normalized = paths.map((p) => normalizeFolderPath(p));
+  const folders = resolveCompiledFolders(manifest.config, options.profile);
+  const normalized = folders.map((f) => normalizeFolderPath(f.path));
 
-  // `paths` feeds the infisical CLI, which fetches whole folders — key-level
-  // `include` filtering happens later, in pull/export-gha. Warn on stderr so the
-  // filtering isn't invisible to someone reading only this folder list.
-  const include = resolveInclude(manifest.config, options.profile);
-  if (include) {
-    console.error(
-      `# note: ${options.packageId} filters emitted keys to: ${include.join(", ")}`
-    );
+  // `paths` feeds the infisical CLI, which fetches whole folders — the tree's
+  // per-folder key selection happens later, in pull/export-gha. Note on stderr
+  // which keys each folder emits so the selection isn't invisible to someone
+  // reading only this folder list.
+  for (const folder of folders) {
+    const keys = folder.keys.map((k) => k.key).join(", ");
+    console.error(`# note: ${normalizeFolderPath(folder.path)} emits: ${keys}`);
   }
   if (resolveFetchMode(manifest.config, options.profile) === "keys") {
     console.error(
-      `# note: ${options.packageId} uses fetch: "keys" — only the include keys are emitted; in CI they are read per-key from the vault (wire-level least privilege).`
+      `# note: ${options.packageId} uses fetch: "keys" — only the declared keys are read, per-key from the vault (wire-level least privilege).`
     );
   }
 
