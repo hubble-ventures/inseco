@@ -28,7 +28,11 @@ inputs:
   infisicml-version:
     description: 'Version of the infisicml npm package to run via npx'
     required: false
-    default: 'latest'
+    default: ''
+  infiscml-version:
+    description: 'Deprecated alias for infisicml-version (the package was renamed). Prefer infisicml-version.'
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -45,4 +49,8 @@ runs:
         if [ -n "${{ inputs.profile }}" ]; then
           args+=(--profile "${{ inputs.profile }}")
         fi
-        npx --yes "@hubble-ventures/infisicml@${{ inputs.infisicml-version }}" "${args[@]}"
+        # Prefer infisicml-version; fall back to the deprecated infiscml-version; else latest.
+        version="${{ inputs.infisicml-version }}"
+        if [ -z "$version" ]; then version="${{ inputs.infiscml-version }}"; fi
+        if [ -z "$version" ]; then version="latest"; fi
+        npx --yes "@hubble-ventures/infisicml@${version}" "${args[@]}"

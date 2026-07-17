@@ -15,9 +15,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (GitHub redirects the old URL), and the exported config type is
   `InfisicmlConfig`. The composite action input `infiscml-version` is now
   `infisicml-version`.
-- **Config discovery is back-compatible.** `infisicml.config.{json,mjs,js}` is
-  preferred, but the old `infiscml.config.*` filenames still resolve, so
-  existing repos keep working without a rename.
+- **Back-compatible on upgrade.** The old names are retained as aliases so
+  existing repos keep working without any changes:
+  - Config discovery prefers `infisicml.config.{json,mjs,js}` but still resolves
+    the old `infiscml.config.*` filenames.
+  - The package still installs an `infiscml` binary alongside `infisicml`, so
+    existing `infiscml …` scripts don't break.
+  - The composite action still accepts the deprecated `infiscml-version` input
+    (preferring `infisicml-version` when both are set).
 
 ## [1.2.0] - 2026-07-16
 
