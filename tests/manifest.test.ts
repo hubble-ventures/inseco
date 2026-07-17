@@ -10,10 +10,10 @@ import { resolveOptionalKeys } from "../src/optional-keys.js";
 describe("manifest", () => {
   it("loads a valid manifest", () => {
     const m = loadManifestJson({
-      tree: {
-        clerk: ["CLERK_SECRET_KEY"],
-        "vendor/app": ["K"],
-      },
+      secrets: [
+        { clerk: ["CLERK_SECRET_KEY"] },
+        { "vendor/app": ["K"] },
+      ],
     });
     expect(resolveCompiledFolders(m).map((f) => f.path)).toEqual([
       "clerk",
@@ -21,31 +21,31 @@ describe("manifest", () => {
     ]);
   });
 
-  it("requires a tree", () => {
+  it("requires secrets", () => {
     expect(() => loadManifestJson({})).toThrow();
   });
 
   it("rejects invalid folder-name characters", () => {
     expect(() =>
-      loadManifestJson({ tree: { "bad path": ["K"] } })
+      loadManifestJson({ secrets: [{ "bad path": ["K"] }] })
     ).toThrow();
   });
 
   it("resolves default folders", () => {
-    const m = loadManifestJson({ tree: { clerk: ["K"] } });
+    const m = loadManifestJson({ secrets: [{ clerk: ["K"] }] });
     expect(resolveCompiledFolders(m).map((f) => f.path)).toEqual(["clerk"]);
   });
 
   it("resolves profile folders replacing the default tree", () => {
     const m = loadManifestJson({
-      tree: { clerk: ["K"] },
+      secrets: [{ clerk: ["K"] }],
       profiles: {
         release: {
-          tree: {
-            clerk: ["K"],
-            fly: ["FLY_API_TOKEN"],
-            "vendor/app": ["V"],
-          },
+          secrets: [
+            { clerk: ["K"] },
+            { fly: ["FLY_API_TOKEN"] },
+            { "vendor/app": ["V"] },
+          ],
         },
       },
     });
@@ -57,7 +57,7 @@ describe("manifest", () => {
   });
 
   it("throws for an unknown profile", () => {
-    const m = loadManifestJson({ tree: { clerk: ["K"] } });
+    const m = loadManifestJson({ secrets: [{ clerk: ["K"] }] });
     expect(() => resolveCompiledFolders(m, "nope")).toThrow(/Unknown profile/);
   });
 
@@ -70,13 +70,13 @@ describe("manifest", () => {
   describe("resolveFetchMode", () => {
     it("defaults to folder when fetch is unset", () => {
       expect(
-        resolveFetchMode(loadManifestJson({ tree: { x: ["A"] } }))
+        resolveFetchMode(loadManifestJson({ secrets: [{ x: ["A"] }] }))
       ).toBe("folder");
     });
 
     it("reads the root fetch mode", () => {
       const m = loadManifestJson({
-        tree: { x: ["A"] },
+        secrets: [{ x: ["A"] }],
         fetch: "keys",
       });
       expect(resolveFetchMode(m)).toBe("keys");
@@ -84,11 +84,11 @@ describe("manifest", () => {
 
     it("a profile fetch replaces the root fetch", () => {
       const m = loadManifestJson({
-        tree: { x: ["A"] },
+        secrets: [{ x: ["A"] }],
         fetch: "keys",
         profiles: {
           deploy: {
-            tree: { x: ["A"], y: ["B"] },
+            secrets: [{ x: ["A"] }, { y: ["B"] }],
             fetch: "folder",
           },
         },
@@ -98,10 +98,10 @@ describe("manifest", () => {
 
     it("a profile without fetch inherits the root fetch", () => {
       const m = loadManifestJson({
-        tree: { x: ["A"] },
+        secrets: [{ x: ["A"] }],
         fetch: "keys",
         profiles: {
-          deploy: { tree: { x: ["A"], y: ["B"] } },
+          deploy: { secrets: [{ x: ["A"] }, { y: ["B"] }] },
         },
       });
       expect(resolveFetchMode(m, "deploy")).toBe("keys");
@@ -109,14 +109,14 @@ describe("manifest", () => {
 
     it("rejects an unknown fetch mode", () => {
       expect(() =>
-        loadManifestJson({ tree: { x: ["A"] }, fetch: "network" })
+        loadManifestJson({ secrets: [{ x: ["A"] }], fetch: "network" })
       ).toThrow();
     });
   });
 
   it("loads environments with optionalKeys", () => {
     const m = loadManifestJson({
-      tree: { clerk: ["CLERK_WEBHOOK_SIGNING_SECRET"] },
+      secrets: [{ clerk: ["CLERK_WEBHOOK_SIGNING_SECRET"] }],
       environments: {
         preview: { optionalKeys: ["CLERK_WEBHOOK_SIGNING_SECRET"] },
       },

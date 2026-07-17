@@ -1,21 +1,25 @@
 import { z } from "zod";
-/** One alias target name, or several. */
-export type AliasSpec = string | string[];
 /**
  * One entry in a folder's contents array. Either:
  * - a **string** — a plain key emitted as-is, or
- * - an **object** whose entries are, per key:
- *   - `SOURCE: target | [targets]` — an alias (the canonical vault key `SOURCE`
- *     is emitted and copied to each target), or
- *   - `"/sub": [ ... ]` — a subfolder (its own contents array).
+ * - an **object** whose entries are, per key, discriminated by value type:
+ *   - `SOURCE: "TARGET"` (string value) — an alias (the canonical vault key
+ *     `SOURCE` is emitted and copied to `TARGET`). Multiple targets? Repeat the
+ *     entry, one target each.
+ *   - `name: [ ... ]` (array value) — a subfolder (its own contents array).
  */
 export type FolderEntry = string | {
-    [key: string]: AliasSpec | FolderArray;
+    [key: string]: string | FolderArray;
 };
 /** A folder's contents: a non-empty array of {@link FolderEntry}. */
 export type FolderArray = FolderEntry[];
-/** The manifest's `tree`: top-level folder name -> contents array. */
-export type SecretsTree = Record<string, FolderArray>;
+/**
+ * The manifest's `secrets`: a non-empty array of single-folder objects
+ * (`{ folderName: contentsArray }`) — the top level of the tree.
+ */
+export type SecretsTree = Array<{
+    [folder: string]: FolderArray;
+}>;
 /** A single emitted key resolved from a folder (canonical name + aliases). */
 export type CompiledKey = {
     key: string;
@@ -27,19 +31,19 @@ export type CompiledFolder = {
     keys: CompiledKey[];
 };
 /**
- * Schema for the manifest's `tree`. Keys are folder names; each value is a
- * folder contents array validated recursively. Cast to the precise
- * {@link SecretsTree} type — the base `z.record` infers `Record<string,
- * unknown>`, but every value is structurally a {@link FolderArray} once
- * {@link validateFolderArray} passes.
+ * Schema for the manifest's `secrets`: a non-empty array of folder objects, each
+ * validated recursively. Cast to the precise {@link SecretsTree} type — the base
+ * `z.array` infers `unknown[]`, but every element is structurally a folder
+ * object once {@link validateFolderObject} passes.
  */
 export declare const treeSchema: z.ZodType<SecretsTree>;
 /**
- * Flatten a validated folder tree into an ordered list of {@link CompiledFolder}.
- * String entries carry no aliases; each `SOURCE: target(s)` entry carries its
- * target(s). A folder's own keys are emitted before recursing into its
- * `/`-prefixed subfolders, so declaration order is preserved (last folder wins
- * on a genuine cross-folder name collision at merge time).
+ * Flatten a validated tree into an ordered list of {@link CompiledFolder}.
+ * String entries carry no aliases; each `SOURCE: "TARGET"` entry carries its
+ * single target (repeat the entry for several targets). A folder's own keys are
+ * emitted before recursing into its subfolders, so declaration order is
+ * preserved (last folder wins on a genuine cross-folder name collision at merge
+ * time).
  */
-export declare function compileTree(tree: SecretsTree): CompiledFolder[];
+export declare function compileTree(secrets: SecretsTree): CompiledFolder[];
 //# sourceMappingURL=tree.d.ts.map

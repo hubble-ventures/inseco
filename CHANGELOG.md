@@ -8,24 +8,28 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed (breaking — manifest format)
 
-- **The manifest is now a folder `tree`.** The flat `paths` + `include` +
-  `aliases` trio is replaced by a single `tree` that mirrors your Infisical
-  folder structure. Each of the three old fields was really an attribute of a
-  specific `(folder, key)` pair; the tree binds them together, so a key's
+- **The manifest is now a `secrets` array of folders.** The flat `paths` +
+  `include` + `aliases` trio is replaced by a single `secrets` array that mirrors
+  your Infisical structure. Each of the three old fields was really an attribute
+  of a specific `(folder, key)` pair; the tree binds them together, so a key's
   allowlist membership and its alias live in one place, provenance is explicit,
-  and the manifest reads like the vault. Each folder maps to an **array** of its
-  contents: a bare string is a plain key, an object `{ SOURCE: target | [targets] }`
-  is an alias, and a `/`-prefixed entry is a **real subfolder** (its own array;
-  nesting mirrors the vault tree — `/sub` under `posthog` reads `/posthog/sub`).
+  and the manifest reads like the vault. `secrets` is an array of folder objects
+  `{ name: [ ...contents ] }`; inside a folder's array, a **bare string** is a
+  plain key, an object with a **string value** `{ SOURCE: "TARGET" }` is an
+  alias, and an object with an **array value** `{ sub: [ ... ] }` is a **real
+  subfolder** (nesting mirrors the vault tree — `sub` under `posthog` reads
+  `/posthog/sub`). Value type discriminates alias vs subfolder, so subfolders
+  need no leading `/`. Fan a key out to several targets by repeating the alias,
+  one target each.
 
   ```jsonc
   // before (v1)                          // after (v2)
   {                                       {
-    "paths": ["posthog"],                   "tree": {
-    "aliases": {                              "posthog": [
+    "paths": ["posthog"],                   "secrets": [
+    "aliases": {                              { "posthog": [
       "POSTHOG_PROJECT_TOKEN":                  { "POSTHOG_PROJECT_TOKEN": "VITE_POSTHOG_KEY" }
-        "VITE_POSTHOG_KEY"                    ]
-    },                                      }
+        "VITE_POSTHOG_KEY"                    ] }
+    },                                      ]
     "include": ["POSTHOG_PROJECT_TOKEN"]  }
   }
   ```
@@ -41,7 +45,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `fetch`-requires-`include` cross-check is removed.
 - **Optional keys stay env-scoped** via `environments.<slug>.optionalKeys`
   (unchanged), now referencing declared canonical key names.
-- **Profiles** carry an alternate `tree` (replacing the base tree when
+- **Profiles** carry an alternate `secrets` array (replacing the base tree when
   `--profile` is set) plus an optional `fetch`; `profiles.<name>.paths` /
   `.include` are gone.
 - **Programmatic API.** `resolvePaths` / `resolveInclude` / `applyInclude` /
@@ -52,15 +56,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   across folders keeps each folder's value and miss); `enforceIncludeKnown` is
   renamed `enforceKnownKeys`. New exports: `compileTree`, `treeSchema`,
   `materializeSecrets`, and the `CompiledFolder` / `CompiledKey` / `FolderEntry` /
-  `FolderArray` / `SecretsTree` / `AliasSpec` / `FolderSecrets` types.
-- **Schema** rewritten around `tree` and published at `@2`.
+  `FolderArray` / `SecretsTree` / `FolderSecrets` types.
+- **Schema** rewritten around the `secrets` array and published at `@2`.
 
 ### Migration
 
-Convert each `secrets.json`: turn every `paths` entry into a `tree` folder whose
-value is an **array** of its keys; list plain keys as bare strings and each
-`aliases` source as an `{ SOURCE: target }` object in that array; keep only the
-keys you want (the array is the allowlist). Point `$schema` at `…/infisicml@2/…`.
+Convert each `secrets.json`: replace `paths`/`include`/`aliases` with a
+`secrets` array of `{ folder: [ ...keys ] }` objects; list plain keys as bare
+strings and each `aliases` source as a `{ SOURCE: "TARGET" }` object (repeat for
+several targets); keep only the keys you want (the array is the allowlist).
+Point `$schema` at `…/infisicml@2/…`.
 Behavior note: an alias entry now emits **both** its canonical name and the
 target(s) — v1 could suppress the canonical via `include`; v2 does not (the
 security boundary is default-deny provenance, not alias suppression).

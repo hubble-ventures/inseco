@@ -56,7 +56,6 @@ export {
 } from "./pull.js";
 export { discoverManifests, type PackageManifest } from "./registry.js";
 export {
-  type AliasSpec,
   type CompiledFolder,
   type CompiledKey,
   compileTree,

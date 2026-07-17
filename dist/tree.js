@@ -1,21 +1,11 @@
 import { z } from "zod";
-// A folder name (a top-level `tree` key or the literal path of a folder). Same
-// character set as v1 `paths`: lowercase, digits, `_ - /`.
+// A folder name (a top-level folder or a subfolder segment). Lowercase, digits,
+// `_ - /`.
 const folderNamePattern = /^[a-z0-9_/-]+$/;
-// A subfolder entry key: a `/`-prefixed segment (e.g. `/sub`, `/vendor/app`).
-// The leading slash distinguishes a subfolder from an alias source — env var
-// names never start with `/`.
-const subfolderPattern = /^\/[a-z0-9_/-]+$/;
 const envVarNamePattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const envVarNameSchema = z
     .string()
     .regex(envVarNamePattern, "must be a valid env var name");
-// An alias value: the extra env var name(s) a build/runtime expects. One target,
-// or several.
-const aliasTargetsSchema = z.union([
-    envVarNameSchema,
-    z.array(envVarNameSchema).min(1),
-]);
 function pushIssues(ctx, result, at) {
     if (result.success)
         return;
@@ -24,11 +14,53 @@ function pushIssues(ctx, result, at) {
     }
 }
 /**
+ * Validate a top-level entry: a folder object `{ name: [ ...contents ] }`. A
+ * folder's value must be an array — a string value at the top level would be an
+ * alias with no folder to live in, which is meaningless.
+ */
+function validateFolderObject(entry, ctx, path) {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path,
+            message: 'top-level entries must be folders: { "name": [ ... ] }',
+        });
+        return;
+    }
+    const names = Object.keys(entry);
+    if (names.length === 0) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path,
+            message: "folder object must name a folder",
+        });
+    }
+    for (const [name, value] of Object.entries(entry)) {
+        const at = [...path, name];
+        if (!folderNamePattern.test(name)) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: at,
+                message: "folder name has invalid characters",
+            });
+        }
+        if (!Array.isArray(value)) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: at,
+                message: "a folder's value must be an array of its contents",
+            });
+            continue;
+        }
+        validateFolderArray(value, ctx, at);
+    }
+}
+/**
  * Recursively validate a folder's contents array. Zod's recursive inference is
- * awkward for the mixed string / alias-object / subfolder-object element shape,
- * so structure and recursion are validated by hand here (leaf checks delegated
- * to the small env-var / alias-target schemas), giving precise, path-anchored
- * messages.
+ * awkward for the mixed string / alias / subfolder shape, so structure and
+ * recursion are validated by hand here, giving precise, path-anchored messages.
+ * Value type discriminates an object entry: a **string** value is an alias
+ * target, an **array** value is a subfolder.
  */
 function validateFolderArray(value, ctx, path) {
     if (!Array.isArray(value)) {
@@ -43,7 +75,7 @@ function validateFolderArray(value, ctx, path) {
         ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path,
-            message: 'folder contents must be a non-empty array of keys, alias objects, or "/"-prefixed subfolders',
+            message: "folder contents must be a non-empty array of keys, aliases, or subfolders",
         });
     }
     value.forEach((entry, i) => validateFolderEntry(entry, ctx, [...path, i]));
@@ -57,7 +89,7 @@ function validateFolderEntry(entry, ctx, path) {
         ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path,
-            message: 'folder entry must be a key name (string), an alias object, or a "/"-prefixed subfolder',
+            message: "folder entry must be a key name (string), an alias, or a subfolder",
         });
         return;
     }
@@ -71,82 +103,88 @@ function validateFolderEntry(entry, ctx, path) {
     }
     for (const [key, value] of Object.entries(entry)) {
         const at = [...path, key];
-        if (subfolderPattern.test(key)) {
+        if (Array.isArray(value)) {
+            // Subfolder: the value is its own contents array.
+            if (!folderNamePattern.test(key)) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: at,
+                    message: "subfolder name has invalid characters",
+                });
+            }
             validateFolderArray(value, ctx, at);
         }
-        else if (envVarNamePattern.test(key)) {
-            pushIssues(ctx, aliasTargetsSchema.safeParse(value), at);
+        else if (typeof value === "string") {
+            // Alias: SOURCE (the entry key) -> TARGET (the value).
+            pushIssues(ctx, envVarNameSchema.safeParse(key), at);
+            pushIssues(ctx, envVarNameSchema.safeParse(value), at);
         }
         else {
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,
                 path: at,
-                message: `invalid entry key "${key}"; must be an env var name (alias) or a "/"-prefixed subfolder`,
+                message: "entry value must be a string (alias target) or an array (subfolder)",
             });
         }
     }
 }
 /**
- * Schema for the manifest's `tree`. Keys are folder names; each value is a
- * folder contents array validated recursively. Cast to the precise
- * {@link SecretsTree} type — the base `z.record` infers `Record<string,
- * unknown>`, but every value is structurally a {@link FolderArray} once
- * {@link validateFolderArray} passes.
+ * Schema for the manifest's `secrets`: a non-empty array of folder objects, each
+ * validated recursively. Cast to the precise {@link SecretsTree} type — the base
+ * `z.array` infers `unknown[]`, but every element is structurally a folder
+ * object once {@link validateFolderObject} passes.
  */
 export const treeSchema = z
-    .record(z.string().regex(folderNamePattern, "folder name has invalid characters"), z.unknown())
-    .superRefine((tree, ctx) => {
-    if (Object.keys(tree).length === 0) {
+    .array(z.unknown())
+    .superRefine((secrets, ctx) => {
+    if (secrets.length === 0) {
         ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: "tree must declare at least one folder",
+            message: "secrets must declare at least one folder",
         });
     }
-    for (const [name, entries] of Object.entries(tree)) {
-        validateFolderArray(entries, ctx, [name]);
-    }
+    secrets.forEach((entry, i) => validateFolderObject(entry, ctx, [i]));
 });
 /**
- * Flatten a validated folder tree into an ordered list of {@link CompiledFolder}.
- * String entries carry no aliases; each `SOURCE: target(s)` entry carries its
- * target(s). A folder's own keys are emitted before recursing into its
- * `/`-prefixed subfolders, so declaration order is preserved (last folder wins
- * on a genuine cross-folder name collision at merge time).
+ * Flatten a validated tree into an ordered list of {@link CompiledFolder}.
+ * String entries carry no aliases; each `SOURCE: "TARGET"` entry carries its
+ * single target (repeat the entry for several targets). A folder's own keys are
+ * emitted before recursing into its subfolders, so declaration order is
+ * preserved (last folder wins on a genuine cross-folder name collision at merge
+ * time).
  */
-export function compileTree(tree) {
+export function compileTree(secrets) {
     const out = [];
-    for (const [name, entries] of Object.entries(tree)) {
-        walk(name, entries, out);
+    for (const folder of secrets) {
+        for (const [name, contents] of Object.entries(folder)) {
+            if (Array.isArray(contents))
+                walk(name, contents, out);
+        }
     }
     return out;
 }
-function walk(path, entries, out) {
+function walk(path, contents, out) {
     const keys = [];
     const subfolders = [];
-    for (const entry of entries) {
+    for (const entry of contents) {
         if (typeof entry === "string") {
             keys.push({ key: entry, aliases: [] });
             continue;
         }
         for (const [key, value] of Object.entries(entry)) {
-            if (key.startsWith("/")) {
-                // Subfolder: strip the leading `/` and join onto the parent path.
-                subfolders.push([`${path}/${key.slice(1)}`, value]);
+            if (Array.isArray(value)) {
+                subfolders.push([`${path}/${key}`, value]);
             }
             else {
-                const targets = value;
-                keys.push({
-                    key,
-                    aliases: Array.isArray(targets) ? targets : [targets],
-                });
+                keys.push({ key, aliases: [value] });
             }
         }
     }
     if (keys.length > 0) {
         out.push({ path, keys });
     }
-    for (const [subPath, subEntries] of subfolders) {
-        walk(subPath, subEntries, out);
+    for (const [subPath, subContents] of subfolders) {
+        walk(subPath, subContents, out);
     }
 }
 //# sourceMappingURL=tree.js.map

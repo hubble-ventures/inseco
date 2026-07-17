@@ -34,12 +34,12 @@ function folderKeyProvider(
 
 describe("ci-skip", () => {
   const withSkipWhen = loadManifestJson({
-    tree: { clerk: ["CLERK_SECRET_KEY"] },
+    secrets: [{ clerk: ["CLERK_SECRET_KEY"] }],
     ci: { skipWhenEnv: ["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"] },
   });
 
   const withStub = loadManifestJson({
-    tree: { clerk: ["CLERK_SECRET_KEY"] },
+    secrets: [{ clerk: ["CLERK_SECRET_KEY"] }],
     ci: { stubInCi: true },
   });
 
@@ -99,10 +99,10 @@ describe("fetchCompiledFolders + materializeSecrets", () => {
       clerk: { CLERK_SECRET_KEY: "sk" },
       stripe: { STRIPE_SECRET_KEY: "ss" },
     });
-    const folders = compileTree({
-      clerk: ["CLERK_SECRET_KEY"],
-      stripe: ["STRIPE_SECRET_KEY"],
-    });
+    const folders = compileTree([
+      { clerk: ["CLERK_SECRET_KEY"] },
+      { stripe: ["STRIPE_SECRET_KEY"] },
+    ]);
     const fetched = await fetchCompiledFolders(
       provider,
       "development",
@@ -123,7 +123,7 @@ describe("fetchCompiledFolders + materializeSecrets", () => {
     const { provider, keyCalls } = folderKeyProvider({
       clerk: { A: "1", B: "2" },
     });
-    const folders = compileTree({ clerk: ["A", "B"] });
+    const folders = compileTree([{ clerk: ["A", "B"] }]);
     const fetched = await fetchCompiledFolders(
       provider,
       "development",
@@ -139,7 +139,7 @@ describe("fetchCompiledFolders + materializeSecrets", () => {
     const { provider } = folderKeyProvider({
       stripe: { STRIPE_SECRET_KEY: "ss", STRIPE_PUBLISHABLE_KEY: "pk" },
     });
-    const folders = compileTree({ stripe: ["STRIPE_PUBLISHABLE_KEY"] });
+    const folders = compileTree([{ stripe: ["STRIPE_PUBLISHABLE_KEY"] }]);
     const fetched = await fetchCompiledFolders(
       provider,
       "development",
@@ -155,7 +155,7 @@ describe("fetchCompiledFolders + materializeSecrets", () => {
     const { provider, keyCalls } = folderKeyProvider({
       stripe: { STRIPE_SECRET_KEY: "ss", STRIPE_PUBLISHABLE_KEY: "pk" },
     });
-    const folders = compileTree({ stripe: ["STRIPE_PUBLISHABLE_KEY"] });
+    const folders = compileTree([{ stripe: ["STRIPE_PUBLISHABLE_KEY"] }]);
     const fetched = await fetchCompiledFolders(
       provider,
       "development",
@@ -172,10 +172,10 @@ describe("fetchCompiledFolders + materializeSecrets", () => {
     // /a and /b both declare a key named TOKEN with different values and
     // different alias targets. Each target must carry its own folder's value —
     // the pre-fix flat merge kept only one TOKEN and routed it to both.
-    const folders = compileTree({
-      a: [{ TOKEN: "A_TOKEN" }],
-      b: [{ TOKEN: "B_TOKEN" }],
-    });
+    const folders = compileTree([
+      { a: [{ TOKEN: "A_TOKEN" }] },
+      { b: [{ TOKEN: "B_TOKEN" }] },
+    ]);
     const fetched = [
       { folder: folders[0], selected: { TOKEN: "a" } },
       { folder: folders[1], selected: { TOKEN: "b" } },
@@ -189,10 +189,7 @@ describe("fetchCompiledFolders + materializeSecrets", () => {
     // TOKEN is declared in both /a and /b but only /b returns it. The /a
     // declaration is still a genuine miss and must fail — the flat map would
     // have contained TOKEN (from /b) and passed.
-    const folders = compileTree({
-      a: ["TOKEN"],
-      b: ["TOKEN"],
-    });
+    const folders = compileTree([{ a: ["TOKEN"] }, { b: ["TOKEN"] }]);
     const fetched = [
       { folder: folders[0], selected: {} },
       { folder: folders[1], selected: { TOKEN: "b" } },
@@ -201,7 +198,7 @@ describe("fetchCompiledFolders + materializeSecrets", () => {
   });
 
   it("allows a per-folder miss when the key name is optional", () => {
-    const folders = compileTree({ a: ["TOKEN"], b: ["TOKEN"] });
+    const folders = compileTree([{ a: ["TOKEN"] }, { b: ["TOKEN"] }]);
     const fetched = [
       { folder: folders[0], selected: {} },
       { folder: folders[1], selected: { TOKEN: "b" } },

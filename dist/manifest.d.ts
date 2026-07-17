@@ -2,15 +2,15 @@ import { z } from "zod";
 import { type CompiledFolder } from "./tree.js";
 export declare const secretsManifestSchema: z.ZodObject<{
     $schema: z.ZodOptional<z.ZodString>;
-    tree: z.ZodType<import("./tree.js").SecretsTree, z.ZodTypeDef, import("./tree.js").SecretsTree>;
+    secrets: z.ZodType<import("./tree.js").SecretsTree, z.ZodTypeDef, import("./tree.js").SecretsTree>;
     profiles: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodObject<{
-        tree: z.ZodType<import("./tree.js").SecretsTree, z.ZodTypeDef, import("./tree.js").SecretsTree>;
+        secrets: z.ZodType<import("./tree.js").SecretsTree, z.ZodTypeDef, import("./tree.js").SecretsTree>;
         fetch: z.ZodOptional<z.ZodEnum<["folder", "keys"]>>;
     }, "strip", z.ZodTypeAny, {
-        tree: import("./tree.js").SecretsTree;
+        secrets: import("./tree.js").SecretsTree;
         fetch?: "keys" | "folder" | undefined;
     }, {
-        tree: import("./tree.js").SecretsTree;
+        secrets: import("./tree.js").SecretsTree;
         fetch?: "keys" | "folder" | undefined;
     }>>>;
     ci: z.ZodOptional<z.ZodObject<{
@@ -33,11 +33,11 @@ export declare const secretsManifestSchema: z.ZodObject<{
         optionalKeys?: string[] | undefined;
     }>>>;
 }, "strip", z.ZodTypeAny, {
-    tree: import("./tree.js").SecretsTree;
+    secrets: import("./tree.js").SecretsTree;
     $schema?: string | undefined;
     fetch?: "keys" | "folder" | undefined;
     profiles?: Record<string, {
-        tree: import("./tree.js").SecretsTree;
+        secrets: import("./tree.js").SecretsTree;
         fetch?: "keys" | "folder" | undefined;
     }> | undefined;
     ci?: {
@@ -49,11 +49,11 @@ export declare const secretsManifestSchema: z.ZodObject<{
         optionalKeys?: string[] | undefined;
     }> | undefined;
 }, {
-    tree: import("./tree.js").SecretsTree;
+    secrets: import("./tree.js").SecretsTree;
     $schema?: string | undefined;
     fetch?: "keys" | "folder" | undefined;
     profiles?: Record<string, {
-        tree: import("./tree.js").SecretsTree;
+        secrets: import("./tree.js").SecretsTree;
         fetch?: "keys" | "folder" | undefined;
     }> | undefined;
     ci?: {

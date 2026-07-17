@@ -13,5 +13,5 @@ export { RemoteProvider } from "./providers/remote.js";
 export type { SecretsProvider } from "./providers/types.js";
 export { type PullResult, pullManifest, writeInjectedSecretsStub, } from "./pull.js";
 export { discoverManifests, type PackageManifest } from "./registry.js";
-export { type AliasSpec, type CompiledFolder, type CompiledKey, compileTree, type FolderArray, type FolderEntry, type SecretsTree, treeSchema, } from "./tree.js";
+export { type CompiledFolder, type CompiledKey, compileTree, type FolderArray, type FolderEntry, type SecretsTree, treeSchema, } from "./tree.js";
 //# sourceMappingURL=index.d.ts.map

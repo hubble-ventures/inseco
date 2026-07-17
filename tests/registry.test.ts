@@ -27,10 +27,13 @@ describe("config + registry", () => {
   it("derives package id from the roots child directory name", async () => {
     const config = await loadConfig(fixtureRepo);
     const web = discoverManifests(config).find((m) => m.id === "web");
-    expect(Object.keys(web?.config.tree ?? {})).toEqual(["clerk", "posthog"]);
+    const secrets = web?.config.secrets ?? [];
+    // Each top-level entry is a { folderName: [...] } object.
+    expect(secrets.map((f) => Object.keys(f)[0])).toEqual(["clerk", "posthog"]);
     // clerk's contents array holds one alias object: CLERK_PUBLISHABLE_KEY -> VITE_*
-    const clerkEntry = web?.config.tree.clerk?.[0] as Record<string, string>;
-    expect(clerkEntry.CLERK_PUBLISHABLE_KEY).toBe("VITE_CLERK_PUBLISHABLE_KEY");
+    const clerkContents = (secrets[0] as Record<string, unknown[]>).clerk;
+    const clerkAlias = clerkContents[0] as Record<string, string>;
+    expect(clerkAlias.CLERK_PUBLISHABLE_KEY).toBe("VITE_CLERK_PUBLISHABLE_KEY");
   });
 
   it("finds config by walking up from a nested cwd", async () => {

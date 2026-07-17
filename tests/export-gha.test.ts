@@ -7,8 +7,8 @@ describe("computeAdvertiseKeys — runtime/deploy classification", () => {
     // Base tree: app declares RUNTIME_KEY. Deploy profile reuses the `app`
     // folder path and adds DEPLOY_TOKEN. DEPLOY_TOKEN must not be advertised as
     // a runtime key even though its folder path is also a runtime folder.
-    const base = compileTree({ app: ["RUNTIME_KEY"] });
-    const all = compileTree({ app: ["RUNTIME_KEY", "DEPLOY_TOKEN"] });
+    const base = compileTree([{ app: ["RUNTIME_KEY"] }]);
+    const all = compileTree([{ app: ["RUNTIME_KEY", "DEPLOY_TOKEN"] }]);
     const emitted = { RUNTIME_KEY: "r", DEPLOY_TOKEN: "d" };
 
     const { runtimeKeys, allKeys } = computeAdvertiseKeys(all, base, emitted);
@@ -17,11 +17,11 @@ describe("computeAdvertiseKeys — runtime/deploy classification", () => {
   });
 
   it("a folder path absent from the base tree is entirely deploy-only", () => {
-    const base = compileTree({ app: ["RUNTIME_KEY"] });
-    const all = compileTree({
-      app: ["RUNTIME_KEY"],
-      fly: ["FLY_API_TOKEN"],
-    });
+    const base = compileTree([{ app: ["RUNTIME_KEY"] }]);
+    const all = compileTree([
+      { app: ["RUNTIME_KEY"] },
+      { fly: ["FLY_API_TOKEN"] },
+    ]);
     const emitted = { RUNTIME_KEY: "r", FLY_API_TOKEN: "t" };
 
     const { runtimeKeys, allKeys } = computeAdvertiseKeys(all, base, emitted);
@@ -33,7 +33,7 @@ describe("computeAdvertiseKeys — runtime/deploy classification", () => {
   });
 
   it("never advertises a name that isn't in the emitted job env", () => {
-    const base = compileTree({ app: ["RUNTIME_KEY", "MAYBE_ABSENT"] });
+    const base = compileTree([{ app: ["RUNTIME_KEY", "MAYBE_ABSENT"] }]);
     const all = base;
     // MAYBE_ABSENT was declared optional and not produced — not in `emitted`.
     const { runtimeKeys, allKeys } = computeAdvertiseKeys(all, base, {
@@ -44,10 +44,10 @@ describe("computeAdvertiseKeys — runtime/deploy classification", () => {
   });
 
   it("with no profile, every declared key is runtime", () => {
-    const tree = compileTree({
-      app: ["A"],
-      vendor: [{ B: "B_PUBLIC" }],
-    });
+    const tree = compileTree([
+      { app: ["A"] },
+      { vendor: [{ B: "B_PUBLIC" }] },
+    ]);
     const { runtimeKeys } = computeAdvertiseKeys(tree, tree, {
       A: "1",
       B: "2",

@@ -15,17 +15,18 @@ const fetchModeSchema = z.enum(["folder", "keys"]);
 
 export const secretsManifestSchema = z.object({
   $schema: z.string().optional(),
-  // The folder tree: which Infisical folders to pull and, per folder, exactly
-  // which keys to emit (`raw`) and how to alias them (`aliased`). Subfolders
-  // nest via `/`-prefixed children. See tree.ts for the node grammar.
-  tree: treeSchema,
+  // The folder tree: an array of `{ folder: [ ...contents ] }` objects naming
+  // which Infisical folders to pull and, per folder, exactly which keys to emit
+  // (bare strings) and how to alias them (`{ SOURCE: "TARGET" }`). Subfolders
+  // nest as `{ name: [ ... ] }`. See tree.ts for the entry grammar.
+  secrets: treeSchema,
   profiles: z
     .record(
       z.string(),
       z.object({
-        // Replaces the root `tree` for this profile when running with
+        // Replaces the root `secrets` for this profile when running with
         // --profile (same replace-not-merge as v1 `paths`).
-        tree: treeSchema,
+        secrets: treeSchema,
         // Overrides the root `fetch` for this profile when set.
         fetch: fetchModeSchema.optional(),
       })
@@ -75,9 +76,9 @@ export function resolveCompiledFolders(
     if (!profileConfig) {
       throw new Error(`Unknown profile '${profile}' in secrets.json`);
     }
-    return compileTree(profileConfig.tree);
+    return compileTree(profileConfig.secrets);
   }
-  return compileTree(manifest.tree);
+  return compileTree(manifest.secrets);
 }
 
 /**
