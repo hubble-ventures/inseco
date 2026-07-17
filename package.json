@@ -26,8 +26,7 @@
     "access": "public"
   },
   "bin": {
-    "infisicml": "./dist/cli.js",
-    "infiscml": "./dist/cli.js"
+    "infisicml": "./dist/cli.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

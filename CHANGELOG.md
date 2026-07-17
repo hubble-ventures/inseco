@@ -6,23 +6,23 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.2.1] - 2026-07-17
 
-### Changed
+### Changed (BREAKING)
 
 - **Renamed the package, CLI, repo, and config from `infiscml` to `infisicml`**
-  (a typo fix — the name is derived from *Infisical*). The npm package is now
-  `@hubble-ventures/infisicml`, the CLI binary is `infisicml`, the repository is
-  [`hubble-ventures/infisicml`](https://github.com/hubble-ventures/infisicml)
-  (GitHub redirects the old URL), and the exported config type is
-  `InfisicmlConfig`. The composite action input `infiscml-version` is now
-  `infisicml-version`.
-- **Back-compatible on upgrade.** The old names are retained as aliases so
-  existing repos keep working without any changes:
-  - Config discovery prefers `infisicml.config.{json,mjs,js}` but still resolves
-    the old `infiscml.config.*` filenames.
-  - The package still installs an `infiscml` binary alongside `infisicml`, so
-    existing `infiscml …` scripts don't break.
-  - The composite action still accepts the deprecated `infiscml-version` input
-    (preferring `infisicml-version` when both are set).
+  (a typo fix — the name is derived from *Infisical*). This is a hard break with
+  **no compatibility shims** — consumers must migrate all references when they
+  adopt the new package:
+  - **npm package**: install `@hubble-ventures/infisicml`; the old
+    `@hubble-ventures/infiscml` package is deprecated and receives no updates.
+  - **CLI binary**: `infisicml` (the old `infiscml` binary is gone — update any
+    scripts, `package.json` commands, and `node_modules/.bin` references).
+  - **Config file**: only `infisicml.config.{json,mjs,js}` is discovered —
+    rename `infiscml.config.*` to `infisicml.config.*`.
+  - **Composite action input**: `infisicml-version` (the old `infiscml-version`
+    input no longer exists).
+  - **Exported type**: `InfisicmlConfig` (was `InfiscmlConfig`).
+  - **Repository**: [`hubble-ventures/infisicml`](https://github.com/hubble-ventures/infisicml)
+    (GitHub redirects the old URL).
 
 ## [1.2.0] - 2026-07-16
 

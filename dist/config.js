@@ -10,11 +10,6 @@ const CONFIG_FILENAMES = [
     "infisicml.config.json",
     "infisicml.config.mjs",
     "infisicml.config.js",
-    // Back-compat: the package was previously named `infiscml`. Keep resolving
-    // the old config filenames so existing repos don't break on upgrade.
-    "infiscml.config.json",
-    "infiscml.config.mjs",
-    "infiscml.config.js",
 ];
 function findConfigFile(startDir) {
     let dir = resolve(startDir);
