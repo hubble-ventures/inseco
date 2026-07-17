@@ -14,7 +14,7 @@ export {
   type AdvertiseKeysHook,
   defineConfig,
   type DiscoveryConfig,
-  type InfiscmlConfig,
+  type InfisicmlConfig,
   loadConfig,
   type ResolvedConfig,
 } from "./config.js";

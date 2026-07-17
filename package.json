@@ -1,6 +1,6 @@
 {
-  "name": "@hubble-ventures/infiscml",
-  "version": "1.2.0",
+  "name": "@hubble-ventures/infisicml",
+  "version": "1.2.1",
   "description": "Infisical Secret Orchestration — federated per-package secret manifests for monorepos, unified across local dev and CI.",
   "keywords": [
     "infisical",
@@ -13,20 +13,20 @@
   ],
   "license": "MIT",
   "author": "Hubble Ventures",
-  "homepage": "https://github.com/hubble-ventures/infiscml#readme",
+  "homepage": "https://github.com/hubble-ventures/infisicml#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hubble-ventures/infiscml.git"
+    "url": "git+https://github.com/hubble-ventures/infisicml.git"
   },
   "bugs": {
-    "url": "https://github.com/hubble-ventures/infiscml/issues"
+    "url": "https://github.com/hubble-ventures/infisicml/issues"
   },
   "type": "module",
   "publishConfig": {
     "access": "public"
   },
   "bin": {
-    "infiscml": "./dist/cli.js"
+    "infisicml": "./dist/cli.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

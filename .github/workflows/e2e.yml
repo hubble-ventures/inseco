@@ -9,11 +9,11 @@ name: E2E (composite action, live Infisical)
 #   INFISICAL_PROJECT_SLUG   sandbox project slug
 #   INFISICAL_IDENTITY_ID    machine identity bound to a GitHub OIDC auth method
 #   INFISICAL_OIDC_AUDIENCE  (optional) audience the identity expects
-#   INFISCML_E2E_PACKAGE_ID    a package id resolvable by the repo's infiscml config
+#   INFISCML_E2E_PACKAGE_ID    a package id resolvable by the repo's infisicml config
 #   INFISCML_E2E_ENVIRONMENT   Infisical env slug (default: development)
 #   INFISCML_E2E_EXPECT_KEY    (optional) a key name the action should export
 #
-# The checkout must also contain an `infiscml.config.{json,ts,js}` and a matching
+# The checkout must also contain an `infisicml.config.{json,ts,js}` and a matching
 # `secrets.json` for INFISCML_E2E_PACKAGE_ID (a small sandbox fixture at the repo
 # root is fine). Without the required vars the job fails early with instructions.
 
@@ -49,7 +49,7 @@ jobs:
           [ -z "$IDENTITY" ] && missing="$missing INFISICAL_IDENTITY_ID"
           [ -z "$PKG" ] && missing="$missing INFISCML_E2E_PACKAGE_ID(or input)"
           if [ -n "$missing" ]; then
-            echo "::error::Missing required config:$missing — set these repo Variables and add a sandbox infiscml.config + secrets.json before running the e2e."
+            echo "::error::Missing required config:$missing — set these repo Variables and add a sandbox infisicml.config + secrets.json before running the e2e."
             exit 1
           fi
 
@@ -61,7 +61,7 @@ jobs:
           project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
           identity-id: ${{ vars.INFISICAL_IDENTITY_ID }}
           oidc-audience: ${{ vars.INFISICAL_OIDC_AUDIENCE }}
-          infiscml-version: latest
+          infisicml-version: latest
 
       - name: Assert a secret reached GITHUB_ENV
         env:

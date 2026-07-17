@@ -38,7 +38,7 @@ describe("hooks — advertise keys", () => {
   });
 
   it("writes each hook's key list as a plain GITHUB_ENV var", () => {
-    tempDir = mkdtempSync(join(tmpdir(), "infiscml-hooks-"));
+    tempDir = mkdtempSync(join(tmpdir(), "infisicml-hooks-"));
     const envFile = join(tempDir, "GITHUB_ENV");
     runAdvertiseKeysHooks(
       envFile,
@@ -51,7 +51,7 @@ describe("hooks — advertise keys", () => {
   });
 
   it("no-ops when no hooks are configured", () => {
-    tempDir = mkdtempSync(join(tmpdir(), "infiscml-hooks-"));
+    tempDir = mkdtempSync(join(tmpdir(), "infisicml-hooks-"));
     const envFile = join(tempDir, "GITHUB_ENV");
     runAdvertiseKeysHooks(envFile, undefined, input);
     expect(() => readFileSync(envFile, "utf8")).toThrow();

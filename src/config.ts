@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 import { parseDotenv } from "./dotenv.js";
 
 /**
- * How Infiscml discovers per-package `secrets.json` manifests. Discovery is
+ * How Infisicml discovers per-package `secrets.json` manifests. Discovery is
  * driven entirely by config, so no repo layout is baked into the tool.
  */
 export type DiscoveryConfig = {
@@ -36,7 +36,7 @@ export type AdvertiseKeysHook = {
   scope?: "runtime" | "all";
 };
 
-export type InfiscmlConfig = {
+export type InfisicmlConfig = {
   /** Infisical project id for the local CLI provider. */
   projectId?: string;
   /** dotenv file (relative to repo root) providing INFISICAL_PROJECT_ID. */
@@ -53,20 +53,20 @@ export type InfiscmlConfig = {
   };
 };
 
-export type ResolvedConfig = InfiscmlConfig & {
+export type ResolvedConfig = InfisicmlConfig & {
   repoRoot: string;
   projectId: string;
 };
 
-/** Identity helper for type-safe `infiscml.config.ts` files. */
-export function defineConfig(config: InfiscmlConfig): InfiscmlConfig {
+/** Identity helper for type-safe `infisicml.config.ts` files. */
+export function defineConfig(config: InfisicmlConfig): InfisicmlConfig {
   return config;
 }
 
 const CONFIG_FILENAMES = [
-  "infiscml.config.json",
-  "infiscml.config.mjs",
-  "infiscml.config.js",
+  "infisicml.config.json",
+  "infisicml.config.mjs",
+  "infisicml.config.js",
 ];
 
 function findConfigFile(startDir: string): { dir: string; file: string } {
@@ -86,20 +86,20 @@ function findConfigFile(startDir: string): { dir: string; file: string } {
   }
 }
 
-async function readConfigFile(file: string): Promise<InfiscmlConfig> {
+async function readConfigFile(file: string): Promise<InfisicmlConfig> {
   if (file.endsWith(".json")) {
-    return JSON.parse(readFileSync(file, "utf8")) as InfiscmlConfig;
+    return JSON.parse(readFileSync(file, "utf8")) as InfisicmlConfig;
   }
   const mod = (await import(pathToFileURL(file).href)) as {
-    default?: InfiscmlConfig;
+    default?: InfisicmlConfig;
   };
   if (!mod.default) {
-    throw new Error(`${file} must export a default InfiscmlConfig`);
+    throw new Error(`${file} must export a default InfisicmlConfig`);
   }
   return mod.default;
 }
 
-function resolveProjectId(repoRoot: string, config: InfiscmlConfig): string {
+function resolveProjectId(repoRoot: string, config: InfisicmlConfig): string {
   if (config.projectId) return config.projectId;
   if (process.env.INFISICAL_PROJECT_ID) return process.env.INFISICAL_PROJECT_ID;
   if (config.projectIdEnvFile) {

@@ -7,11 +7,11 @@ name: Release
 #
 # This workflow then:
 #   1. builds + tests the tagged commit,
-#   2. publishes `infiscml` to npm via **trusted publishing** (OIDC) — no NPM_TOKEN
+#   2. publishes `infisicml` to npm via **trusted publishing** (OIDC) — no NPM_TOKEN
 #      secret, provenance attached automatically,
 #   3. creates a GitHub Release with notes pulled from CHANGELOG.md,
 #   4. moves the floating major tag (e.g. `v1`) to this commit so consumers can
-#      pin `hubble-ventures/infiscml/action@v1`.
+#      pin `hubble-ventures/infisicml/action@v1`.
 #
 # Bootstrapping note: npm trusted publishing must be configured against an
 # existing package, so the FIRST publish (v1.0.0) is done locally to reserve the
@@ -76,8 +76,8 @@ jobs:
       - name: Publish to npm (trusted publishing, idempotent)
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          if npm view "@hubble-ventures/infiscml@$VERSION" version >/dev/null 2>&1; then
-            echo "@hubble-ventures/infiscml@$VERSION already on npm — skipping publish."
+          if npm view "@hubble-ventures/infisicml@$VERSION" version >/dev/null 2>&1; then
+            echo "@hubble-ventures/infisicml@$VERSION already on npm — skipping publish."
           else
             npm publish --access public --provenance
           fi

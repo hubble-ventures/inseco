@@ -1,14 +1,14 @@
-# infiscml
+# infisicml
 
 **Infisical Secret Orchestration** — federated, per-package secret manifests for monorepos, unified across local development and CI.
 
-[Infisical](https://infisical.com) gives you a vault and the primitives to read from it (a CLI, a REST API, machine-identity auth, a GitHub Action). All of those operate on **one folder / one environment / one process at a time**. Infiscml is the layer above that: it lets each package in a monorepo declare which vault folders it needs in a committed `secrets.json`, then materializes those secrets **the same way** whether you're a developer running a local pull or a CI job exporting into `GITHUB_ENV`.
+[Infisical](https://infisical.com) gives you a vault and the primitives to read from it (a CLI, a REST API, machine-identity auth, a GitHub Action). All of those operate on **one folder / one environment / one process at a time**. Infisicml is the layer above that: it lets each package in a monorepo declare which vault folders it needs in a committed `secrets.json`, then materializes those secrets **the same way** whether you're a developer running a local pull or a CI job exporting into `GITHUB_ENV`.
 
-> Infiscml orchestrates Infisical. It stores no secrets and never sees your vault contents at rest — the vault, auth, and secret values stay in Infisical.
+> Infisicml orchestrates Infisical. It stores no secrets and never sees your vault contents at rest — the vault, auth, and secret values stay in Infisical.
 
 ## Why
 
-| Problem | Native Infisical | Infiscml |
+| Problem | Native Infisical | Infisicml |
 |---|---|---|
 | N packages each need a different slice of the vault | Hand-write export commands per app×folder | One committed `secrets.json` per package, auto-discovered |
 | Dev uses the CLI, CI uses the API | Two integrations kept in sync by hand | One `SecretsProvider` abstraction; identical downstream logic |
@@ -20,17 +20,17 @@
 ## Install
 
 ```bash
-npm i -D @hubble-ventures/infiscml    # or pnpm add -D @hubble-ventures/infiscml
+npm i -D @hubble-ventures/infisicml    # or pnpm add -D @hubble-ventures/infisicml
 ```
 
 Requires the [`infisical` CLI](https://infisical.com/docs/cli/overview) for local pulls (`infisical login` once). CI needs no CLI — it uses the REST API.
 
 ## Quick start
 
-1. Add an `infiscml.config.ts` (or `.json`) at your monorepo root — this file marks the repo root:
+1. Add an `infisicml.config.ts` (or `.json`) at your monorepo root — this file marks the repo root:
 
    ```ts
-   import { defineConfig } from "@hubble-ventures/infiscml";
+   import { defineConfig } from "@hubble-ventures/infisicml";
 
    export default defineConfig({
      projectIdEnvFile: ".env.infisical", // provides INFISICAL_PROJECT_ID
@@ -44,7 +44,7 @@ Requires the [`infisical` CLI](https://infisical.com/docs/cli/overview) for loca
 
    ```jsonc
    {
-     "$schema": "https://cdn.jsdelivr.net/npm/@hubble-ventures/infiscml@1/schema/secrets.schema.json",
+     "$schema": "https://cdn.jsdelivr.net/npm/@hubble-ventures/infisicml@1/schema/secrets.schema.json",
      "paths": ["clerk", "posthog"],
      "output": ".env", // written next to this manifest; defaults to .env.secrets
      "aliases": {
@@ -62,9 +62,9 @@ Requires the [`infisical` CLI](https://infisical.com/docs/cli/overview) for loca
 3. Pull secrets into gitignored `.env.secrets` files:
 
    ```bash
-   npx infiscml pull                 # every package
-   npx infiscml pull web api --force # specific ids, bypass the exists-check
-   npx infiscml validate             # check every secrets.json against the schema
+   npx infisicml pull                 # every package
+   npx infisicml pull web api --force # specific ids, bypass the exists-check
+   npx infisicml validate             # check every secrets.json against the schema
    ```
 
 See [`examples/`](./examples) for a fuller config and manifest.
@@ -84,7 +84,7 @@ Common flags: `--env`, `--profile`, `--force`, `--here` (pull the cwd package), 
 
 ## Authentication
 
-Infiscml supports exactly one auth lane per environment — no secrets to rotate, no fallbacks to reason about:
+Infisicml supports exactly one auth lane per environment — no secrets to rotate, no fallbacks to reason about:
 
 | Where | How | Requires |
 |---|---|---|
@@ -95,7 +95,7 @@ There is no client-id/secret (universal-auth) path and no long-lived token anywh
 
 ## GitHub Actions
 
-Use the bundled composite action (runs `infiscml export-gha` via `npx`). The calling job **must** grant `id-token: write` so the runner can mint an OIDC token:
+Use the bundled composite action (runs `infisicml export-gha` via `npx`). The calling job **must** grant `id-token: write` so the runner can mint an OIDC token:
 
 ```yaml
 jobs:
@@ -106,7 +106,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: hubble-ventures/infiscml/action@v1
+      - uses: hubble-ventures/infisicml/action@v1
         with:
           package-id: api
           environment: production
@@ -117,15 +117,15 @@ jobs:
 
 Secrets are masked and appended to `GITHUB_ENV` for subsequent steps. Any configured `advertiseKeys` hook writes a plain, comma-separated list of runtime key **names** so a deploy step can forward exactly those. A full CI + deploy example is in [`examples/github-actions.yml`](./examples/github-actions.yml).
 
-**Pinning the action.** `@v1` is a floating major tag that always points at the latest `v1.x` release — it moves forward on each release but never across a breaking major. For a fully immutable pin, use a release SHA instead: `uses: hubble-ventures/infiscml/action@<sha>`. The action shells out to `npx --yes @hubble-ventures/infiscml@latest`; pin the package too by passing `infiscml-version:` (e.g. the same `1.x` version) if you want the CLI locked as well.
+**Pinning the action.** `@v1` is a floating major tag that always points at the latest `v1.x` release — it moves forward on each release but never across a breaking major. For a fully immutable pin, use a release SHA instead: `uses: hubble-ventures/infisicml/action@<sha>`. The action shells out to `npx --yes @hubble-ventures/infisicml@latest`; pin the package too by passing `infisicml-version:` (e.g. the same `1.x` version) if you want the CLI locked as well.
 
 ## Local development
 
-Log in once as yourself; infiscml shells out to `infisical export` under your session:
+Log in once as yourself; infisicml shells out to `infisical export` under your session:
 
 ```bash
 infisical login          # authenticate as you
-npx infiscml pull          # write .env.secrets next to every secrets.json
+npx infisicml pull          # write .env.secrets next to every secrets.json
 ```
 
 Load `.env.secrets` however your dev runtime already loads env files. See [`examples/local-dev.md`](./examples/local-dev.md) for package-script and task-runner wiring.
@@ -192,7 +192,7 @@ server secrets in the same folders are never emitted.
 
 ### Wire-level least privilege (`fetch: "keys"`)
 
-`include` on its own is a **post-fetch filter**: infiscml pulls each whole folder, then drops
+`include` on its own is a **post-fetch filter**: infisicml pulls each whole folder, then drops
 the unwanted keys before writing the output. The excluded values still travel over the wire
 into your machine / the CI runner — they're just never written to `.env` or `GITHUB_ENV`. For
 most setups that's fine. When you need the vault to **not even transmit** the secrets you
@@ -213,7 +213,7 @@ don't use, set `fetch: "keys"`:
 }
 ```
 
-In `keys` mode infiscml emits **only** the keys `include` resolves to. Where the guarantee
+In `keys` mode infisicml emits **only** the keys `include` resolves to. Where the guarantee
 bites depends on the lane:
 
 - **CI (`export-gha`)** — true **wire-level** least privilege: each key is fetched with the
@@ -221,13 +221,13 @@ bites depends on the lane:
   `/stripe` and `/google` are **never sent by the vault**. This is the security-critical lane
   (shared runners, `GITHUB_ENV`).
 - **Local (`pull`)** — the `infisical` CLI has no single-secret *server* read (`secrets get`
-  pulls the whole folder and filters client-side), so locally infiscml fetches each folder
+  pulls the whole folder and filters client-side), so locally infisicml fetches each folder
   once and selects the keys. It narrows what's **written to disk**, not what the vault
   transmits — on your own machine, where folder mode already lands.
 
 - **Requires `include`** — key mode fetches exactly what `include` names, so an allowlist is
   mandatory (root or the active profile). `validate` and the pull/CI step both enforce this.
-- **Aliases are reverse-mapped** — `include` names the *final* (post-alias) keys, so infiscml
+- **Aliases are reverse-mapped** — `include` names the *final* (post-alias) keys, so infisicml
   fetches the canonical vault source behind each alias target. Above, listing
   `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` fetches the canonical `STRIPE_PUBLISHABLE_KEY`.
 - **Imports still resolve** — a key surfaced into a `paths` folder via an Infisical import is
@@ -236,7 +236,7 @@ bites depends on the lane:
 - **Same emit result** — everything after the fetch (aliases, `include` filtering, unknown-key
   enforcement, `optionalKeys`) is identical to folder mode; only what's read narrows.
 - **Cost** — in CI, one request **per key** instead of one per folder; the `paths` list becomes
-  advisory (`infiscml paths` notes this).
+  advisory (`infisicml paths` notes this).
 - **Profiles** — a profile may set its own `fetch`, which **replaces** the root value (like
   `paths` / `include`). A deploy profile can stay in `folder` mode while the runtime default
   is `keys`, or vice versa.
@@ -245,7 +245,7 @@ bites depends on the lane:
 
 ### Non-secret defaults (`.env.sample`)
 
-Infiscml writes **only the secret slice** it pulls from Infisical — it does not merge a
+Infisicml writes **only the secret slice** it pulls from Infisical — it does not merge a
 committed base file. If a package keeps non-secret defaults and structure in a
 `.env.sample`, keep both files and load them together at runtime, secrets last so they
 win:
@@ -257,7 +257,7 @@ node --env-file=.env.sample --env-file=.env.secrets server.js
 
 ```jsonc
 // package.json
-{ "scripts": { "dev": "infiscml --here pull && node --env-file=.env.sample --env-file=.env.secrets server.js" } }
+{ "scripts": { "dev": "infisicml --here pull && node --env-file=.env.sample --env-file=.env.secrets server.js" } }
 ```
 
 Point `output` at whatever filename your loader expects (e.g. `.env` layered over a
@@ -267,7 +267,7 @@ committed `.env.example`). Do **not** overwrite a committed sample with the pull
 ## Programmatic API
 
 ```ts
-import { loadConfig, discoverManifests, pullManifest, LocalProvider } from "@hubble-ventures/infiscml";
+import { loadConfig, discoverManifests, pullManifest, LocalProvider } from "@hubble-ventures/infisicml";
 
 const config = await loadConfig();
 const provider = new LocalProvider({ projectId: config.projectId });
@@ -303,13 +303,13 @@ version already on npm is skipped.
 >
 > (`publishConfig.access: public` in `package.json` enforces this even if the flag is
 > omitted.) Then, in the package's npm settings, add a **trusted publisher** for
-> `hubble-ventures/infiscml` → workflow `release.yml`, with **no environment** (the release
+> `hubble-ventures/infisicml` → workflow `release.yml`, with **no environment** (the release
 > job sets none — the OIDC claims must match). Every subsequent tag push publishes
 > automatically with no token.
 
 ## Design
 
-Everything repo-specific lives in `infiscml.config` — package discovery, the project-id source, the OIDC audience, and deploy-time key advertisement are all configuration, so nothing about one repo's layout is baked into the tool. The manifest contract (`secrets.json`) is the stable public interface, versioned via the [published JSON Schema](./schema/secrets.schema.json).
+Everything repo-specific lives in `infisicml.config` — package discovery, the project-id source, the OIDC audience, and deploy-time key advertisement are all configuration, so nothing about one repo's layout is baked into the tool. The manifest contract (`secrets.json`) is the stable public interface, versioned via the [published JSON Schema](./schema/secrets.schema.json).
 
 ## License
 

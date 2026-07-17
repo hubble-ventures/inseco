@@ -11,7 +11,7 @@ const fixtureRepo = join(
 );
 
 describe("config + registry", () => {
-  it("loads config from the nearest infiscml.config.json", async () => {
+  it("loads config from the nearest infisicml.config.json", async () => {
     const config = await loadConfig(fixtureRepo);
     expect(config.repoRoot).toBe(fixtureRepo);
     expect(config.projectId).toBe("fixture-project-id");
