@@ -62,25 +62,43 @@ jobs:
           set -euo pipefail
           PKG="$(node -p "require('./package.json').version")"
           TAG="v$PKG"
+          MAJOR="v${PKG%%.*}"
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             if [ "${GITHUB_REF_NAME}" != "$TAG" ]; then
               echo "::error::tag ${GITHUB_REF_NAME} does not match package.json version $PKG"
               exit 1
             fi
             echo "release=true" >> "$GITHUB_OUTPUT"
-          # Main push: gate on whether the release actually COMPLETED, not on the
-          # tag. The release job creates the tag before publishing, so a tag can
-          # exist for a half-finished release — gating on it would strand a
-          # partial release with no rerun path. Every release step is idempotent,
-          # so re-run unless BOTH npm has the version AND its GitHub Release
-          # exists (a rerun then finishes publish / release / major-tag repair).
-          elif npm view "@hubble-ventures/infisicml@$PKG" version >/dev/null 2>&1 \
-               && gh release view "$TAG" >/dev/null 2>&1; then
-            echo "::notice::$TAG already published — nothing to release"
-            echo "release=false" >> "$GITHUB_OUTPUT"
           else
-            echo "::notice::releasing $TAG"
-            echo "release=true" >> "$GITHUB_OUTPUT"
+            # Main push: gate on whether the release actually COMPLETED, not on
+            # the tag. The release job creates the version tag before publishing
+            # and force-moves the floating major tag last, so any of those tags
+            # can exist for a half-finished release — gating on them would strand
+            # a partial release with no rerun path. Every release step is
+            # idempotent, so re-run unless the release is fully done: the version
+            # is on npm, its GitHub Release exists, and (for non-prereleases) the
+            # major tag already points at the version tag's commit.
+            done=false
+            if npm view "@hubble-ventures/infisicml@$PKG" version >/dev/null 2>&1 \
+               && gh release view "$TAG" >/dev/null 2>&1; then
+              case "$PKG" in
+                *-*) done=true ;; # prerelease: major tag intentionally not moved
+                *)
+                  ver_sha="$(git ls-remote origin "refs/tags/$TAG" | awk '{print $1}')"
+                  maj_sha="$(git ls-remote origin "refs/tags/$MAJOR" | awk '{print $1}')"
+                  if [ -n "$ver_sha" ] && [ "$ver_sha" = "$maj_sha" ]; then
+                    done=true
+                  fi
+                  ;;
+              esac
+            fi
+            if [ "$done" = true ]; then
+              echo "::notice::$TAG already fully released — nothing to do"
+              echo "release=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "::notice::releasing $TAG"
+              echo "release=true" >> "$GITHUB_OUTPUT"
+            fi
           fi
           echo "version=$PKG" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
