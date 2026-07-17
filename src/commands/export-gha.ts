@@ -1,5 +1,5 @@
 import { applyAliases } from "../aliases.js";
-import { fetchSecretsForPaths } from "../ci-skip.js";
+import { fetchManifestSecrets } from "../ci-skip.js";
 import { loadConfig } from "../config.js";
 import { normalizeEnvSlug } from "../env-slug.js";
 import { appendSecretsToGithubEnv } from "../github-env.js";
@@ -79,13 +79,21 @@ export async function runExportGha(options: ExportGhaOptions): Promise<void> {
 
   // Two calls (runtime then deploy-only), reusing the cached access token, so we
   // know which keys are runtime without per-folder provenance through the merge.
-  const runtimeSecrets = await fetchSecretsForPaths(
+  const runtimeSecrets = await fetchManifestSecrets(
     provider,
     envName,
-    runtimePaths
+    runtimePaths,
+    manifest.config,
+    options.profile
   );
   const deployOnlySecrets = deployOnlyPaths.length
-    ? await fetchSecretsForPaths(provider, envName, deployOnlyPaths)
+    ? await fetchManifestSecrets(
+        provider,
+        envName,
+        deployOnlyPaths,
+        manifest.config,
+        options.profile
+      )
     : {};
 
   const optionalKeys = resolveOptionalKeys(manifest.config, envName);

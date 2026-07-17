@@ -42,6 +42,29 @@ export class LocalProvider {
         }
         throw new Error(`infisical export failed for ${pathArg} after ${this.maxAttempts} attempts: ${lastMsg || "unknown error"}`);
     }
+    /**
+     * Select only the named keys from a folder.
+     *
+     * The `infisical` CLI has no true single-secret *server* fetch — `secrets get`
+     * pulls the whole folder from the API and filters client-side (running it per
+     * key would transfer the folder once per key). So we fetch the folder once via
+     * {@link exportFolder} and select the requested keys locally. This means the
+     * **wire-level** least-privilege guarantee holds only for the CI/REST lane
+     * ({@link RemoteProvider}); the local lane narrows what's *written*, not what
+     * the vault transmits. Crucially, it also inherits `exportFolder`'s retry and
+     * its clear `"infisical export failed…"` error, so a transient CLI failure
+     * throws an infrastructure error rather than silently dropping keys into the
+     * generic "not produced by any folder" path.
+     */
+    async exportKeys(envName, folder, keys) {
+        const all = await this.exportFolder(envName, folder);
+        const out = {};
+        for (const key of keys) {
+            if (key in all)
+                out[key] = all[key];
+        }
+        return out;
+    }
 }
 function sleepSeconds(seconds) {
     return new Promise((resolve) => setTimeout(resolve, seconds * 1000));

@@ -1,6 +1,7 @@
 import { loadConfig } from "../config.js";
 import {
   normalizeFolderPath,
+  resolveFetchMode,
   resolveInclude,
   resolvePaths,
 } from "../manifest.js";
@@ -31,6 +32,11 @@ export async function runPaths(options: PathsOptions): Promise<void> {
   if (include) {
     console.error(
       `# note: ${options.packageId} filters emitted keys to: ${include.join(", ")}`
+    );
+  }
+  if (resolveFetchMode(manifest.config, options.profile) === "keys") {
+    console.error(
+      `# note: ${options.packageId} uses fetch: "keys" — only the include keys are emitted; in CI they are read per-key from the vault (wire-level least privilege).`
     );
   }
 

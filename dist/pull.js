@@ -1,10 +1,10 @@
 import { existsSync, writeFileSync } from "node:fs";
 import { relative } from "node:path";
 import { applyAliases } from "./aliases.js";
-import { fetchSecretsForPaths, keysForCiStub, shouldSkipInfisicalPull, } from "./ci-skip.js";
+import { fetchManifestSecrets, keysForCiStub, shouldSkipInfisicalPull, } from "./ci-skip.js";
 import { serializeDotenv } from "./dotenv.js";
 import { selectEmittedSecrets } from "./include.js";
-import { normalizeFolderPath, resolveInclude, resolvePaths, resolveSecretsOutputPath, } from "./manifest.js";
+import { normalizeFolderPath, resolveFetchMode, resolveInclude, resolvePaths, resolveSecretsOutputPath, } from "./manifest.js";
 import { resolveOptionalKeys } from "./optional-keys.js";
 export function writeInjectedSecretsStub(outputPath, manifest, keys) {
     const fromEnv = {};
@@ -38,7 +38,8 @@ export async function pullManifest(options) {
         return "skipped";
     }
     const paths = resolvePaths(manifest.config, profile);
-    const aliased = applyAliases(await fetchSecretsForPaths(provider, envName, paths), manifest.config);
+    const fetchMode = resolveFetchMode(manifest.config, profile);
+    const aliased = applyAliases(await fetchManifestSecrets(provider, envName, paths, manifest.config, profile), manifest.config);
     // Default-deny key selection: emit only the allowlisted keys when `include`
     // is set (after aliases). Absent = emit all.
     const include = resolveInclude(manifest.config, profile);
@@ -53,6 +54,7 @@ export async function pullManifest(options) {
         `# Environment: ${envName}`,
         profile ? `# Profile: ${profile}` : "",
         `# Paths: ${paths.map((p) => normalizeFolderPath(p)).join(", ")}`,
+        fetchMode === "keys" ? "# Fetch: keys (per-key least-privilege read)" : "",
         include ? `# Include: ${include.join(", ")}` : "",
         `# Generated: ${new Date().toISOString()}`,
     ]

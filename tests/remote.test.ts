@@ -52,3 +52,68 @@ describe("RemoteProvider — GitHub OIDC only", () => {
     );
   });
 });
+
+describe("RemoteProvider.exportKeys — per-key least-privilege read", () => {
+  /** Serve named single-secret reads; anything else 404s (key not in folder). */
+  function keyFetch(
+    calls: string[],
+    present: Record<string, string>
+  ): typeof fetch {
+    return (async (input: string | URL | Request) => {
+      const url = typeof input === "string" ? input : input.toString();
+      calls.push(url);
+      if (url.includes("oidc-auth/login")) {
+        return new Response(JSON.stringify({ accessToken: "tok" }), {
+          status: 200,
+        });
+      }
+      for (const [key, value] of Object.entries(present)) {
+        if (url.includes(`/secrets/raw/${key}?`)) {
+          return new Response(
+            JSON.stringify({ secret: { secretKey: key, secretValue: value } }),
+            { status: 200 }
+          );
+        }
+      }
+      return new Response("not found", { status: 404 });
+    }) as unknown as typeof fetch;
+  }
+
+  it("requests only the named keys and skips 404 misses", async () => {
+    const calls: string[] = [];
+    const provider = new RemoteProvider({
+      projectSlug: "proj",
+      identityId: "id-123",
+      getOidcJwt: async () => "jwt",
+      fetchFn: keyFetch(calls, { STRIPE_PUBLISHABLE_KEY: "pk_live" }),
+    });
+
+    const secrets = await provider.exportKeys("production", "stripe", [
+      "STRIPE_PUBLISHABLE_KEY",
+      "STRIPE_SECRET_KEY", // absent in folder → 404 → skipped, not thrown
+    ]);
+
+    expect(secrets).toEqual({ STRIPE_PUBLISHABLE_KEY: "pk_live" });
+    // Never requested a whole-folder read, only per-key raw endpoints.
+    expect(calls.some((u) => u.includes("/secrets/raw/STRIPE_PUBLISHABLE_KEY")))
+      .toBe(true);
+    // Imports are followed (matching folder mode) so an import-surfaced key is
+    // still resolved; the single-name endpoint returns only that one secret.
+    expect(calls.some((u) => u.includes("include_imports=true"))).toBe(true);
+    expect(
+      calls.some((u) => u.includes("secrets/raw?") /* folder list form */)
+    ).toBe(false);
+  });
+
+  it("reuses one access token across all per-key requests", async () => {
+    const calls: string[] = [];
+    const provider = new RemoteProvider({
+      projectSlug: "proj",
+      identityId: "id-123",
+      getOidcJwt: async () => "jwt",
+      fetchFn: keyFetch(calls, { A: "1", B: "2" }),
+    });
+    await provider.exportKeys("production", "vendor", ["A", "B"]);
+    expect(calls.filter((u) => u.includes("oidc-auth/login"))).toHaveLength(1);
+  });
+});

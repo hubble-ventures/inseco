@@ -15,6 +15,7 @@
 | Vault names a secret once, but Vite wants `VITE_*` and Next wants `NEXT_PUBLIC_*` | Each workflow re-derives the prefixed copy | Declare `aliases` once; applied in dev **and** CI |
 | Skip the pull in CI when vars are already injected | Bash guards in every workflow | `ci.skipWhenEnv` / `ci.stubInCi` policy |
 | A deploy needs exactly the runtime keys, not the deploy creds | Hand-maintained allowlist | `profiles` + `advertiseKeys` hook — `secrets.json` is the source of truth |
+| A client must read a shared vendor folder without ever receiving its server secrets | Split the vault or accept over-fetch | `fetch: "keys"` requests only the named keys — the vault never transmits the rest |
 
 ## Install
 
@@ -131,11 +132,12 @@ Load `.env.secrets` however your dev runtime already loads env files. See [`exam
 
 ## Concepts
 
-- **Manifest (`secrets.json`)** — per package: `paths` (vault folders), optional `profiles`, `aliases`, `include`, `ci`, `environments`, `output`.
+- **Manifest (`secrets.json`)** — per package: `paths` (vault folders), optional `profiles`, `aliases`, `include`, `fetch`, `ci`, `environments`, `output`.
 - **Output file** — `output` sets the written filename (default `.env.secrets`), placed **next to the manifest**. Because each package owns its own `secrets.json`, this gives a distinct file per package: a root manifest with `"output": ".env.local"` writes the repo-root `.env.local`; a manifest in `apps/backend` with `"output": ".env"` writes `apps/backend/.env`. `output` is a filename only (no path separators) — to target a different directory, place the manifest in that directory.
 - **Profiles** — named path sets that *replace* base `paths` when `--profile` is set. Base paths are runtime secrets; profile-only paths (e.g. `fly`) are deploy/release credentials.
 - **Aliases** — copy a canonical secret to extra tool-specific names. Each source maps to **one target (string) or many (array)**, so a single vault key can fan out to every framework prefix (`EXPO_PUBLIC_*`, `VITE_*`, `NEXT_PUBLIC_*`) in one output. Real secrets of a target name always win; the operation is idempotent and never overwrites.
 - **Include (key allowlist)** — `include` emits **only** the listed keys from whatever the folders yielded (default-deny key selection). Omit it and every key is emitted (unchanged). See [Key selection](#key-selection-include) below.
+- **Fetch mode** — `fetch: "keys"` requests only the keys `include` resolves to, so the vault never transmits the rest (wire-level least privilege). Default `"folder"` reads whole folders and filters locally. See [Wire-level least privilege](#wire-level-least-privilege-fetch-keys) below.
 - **CI skip/stub** — `ci.skipWhenEnv` skips the pull when all listed vars are already set in CI; `ci.stubInCi` always stubs in CI. Both write a `.env.secrets` from `process.env` instead of calling Infisical.
 - **Optional keys** — `environments.<slug>.optionalKeys` downgrade a missing key to a `::notice::` in `export-gha` instead of a failure.
 - **Advertise-keys hooks** — publish runtime key *names* (never values) to `GITHUB_ENV` for deploy forwarding.
@@ -187,6 +189,59 @@ server secrets in the same folders are never emitted.
   for that profile (like `profiles.<name>.paths`). A profile without `include` inherits the
   root one.
 - **Backward compatible** — omit `include` and behavior is unchanged (every key is emitted).
+
+### Wire-level least privilege (`fetch: "keys"`)
+
+`include` on its own is a **post-fetch filter**: infiscml pulls each whole folder, then drops
+the unwanted keys before writing the output. The excluded values still travel over the wire
+into your machine / the CI runner — they're just never written to `.env` or `GITHUB_ENV`. For
+most setups that's fine. When you need the vault to **not even transmit** the secrets you
+don't use, set `fetch: "keys"`:
+
+```jsonc
+// apps/web/secrets.json — client package, strict wire-level least privilege
+{
+  "paths": ["stripe", "google"],
+  "fetch": "keys",
+  "aliases": {
+    "STRIPE_PUBLISHABLE_KEY": ["EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY"]
+  },
+  "include": [
+    "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY",
+    "GOOGLE_MAPS_API_KEY"
+  ]
+}
+```
+
+In `keys` mode infiscml emits **only** the keys `include` resolves to. Where the guarantee
+bites depends on the lane:
+
+- **CI (`export-gha`)** — true **wire-level** least privilege: each key is fetched with the
+  single-secret REST endpoint (`GET /api/v3/secrets/raw/{name}`), so the other keys in
+  `/stripe` and `/google` are **never sent by the vault**. This is the security-critical lane
+  (shared runners, `GITHUB_ENV`).
+- **Local (`pull`)** — the `infisical` CLI has no single-secret *server* read (`secrets get`
+  pulls the whole folder and filters client-side), so locally infiscml fetches each folder
+  once and selects the keys. It narrows what's **written to disk**, not what the vault
+  transmits — on your own machine, where folder mode already lands.
+
+- **Requires `include`** — key mode fetches exactly what `include` names, so an allowlist is
+  mandatory (root or the active profile). `validate` and the pull/CI step both enforce this.
+- **Aliases are reverse-mapped** — `include` names the *final* (post-alias) keys, so infiscml
+  fetches the canonical vault source behind each alias target. Above, listing
+  `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` fetches the canonical `STRIPE_PUBLISHABLE_KEY`.
+- **Imports still resolve** — a key surfaced into a `paths` folder via an Infisical import is
+  fetched in `keys` mode too (the per-key read follows imports but returns only that one
+  secret), so enabling `keys` never silently drops an import-backed key.
+- **Same emit result** — everything after the fetch (aliases, `include` filtering, unknown-key
+  enforcement, `optionalKeys`) is identical to folder mode; only what's read narrows.
+- **Cost** — in CI, one request **per key** instead of one per folder; the `paths` list becomes
+  advisory (`infiscml paths` notes this).
+- **Profiles** — a profile may set its own `fetch`, which **replaces** the root value (like
+  `paths` / `include`). A deploy profile can stay in `folder` mode while the runtime default
+  is `keys`, or vice versa.
+- **Backward compatible** — omit `fetch` (or set `"folder"`) and behavior is byte-for-byte
+  unchanged.
 
 ### Non-secret defaults (`.env.sample`)
 

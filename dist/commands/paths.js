@@ -1,5 +1,5 @@
 import { loadConfig } from "../config.js";
-import { normalizeFolderPath, resolveInclude, resolvePaths, } from "../manifest.js";
+import { normalizeFolderPath, resolveFetchMode, resolveInclude, resolvePaths, } from "../manifest.js";
 import { discoverManifests } from "../registry.js";
 export async function runPaths(options) {
     const config = await loadConfig(options.cwd);
@@ -16,6 +16,9 @@ export async function runPaths(options) {
     const include = resolveInclude(manifest.config, options.profile);
     if (include) {
         console.error(`# note: ${options.packageId} filters emitted keys to: ${include.join(", ")}`);
+    }
+    if (resolveFetchMode(manifest.config, options.profile) === "keys") {
+        console.error(`# note: ${options.packageId} uses fetch: "keys" — only the include keys are emitted; in CI they are read per-key from the vault (wire-level least privilege).`);
     }
     if (options.comma) {
         console.log(normalized.map((p) => p.replace(/^\//, "")).join(","));
