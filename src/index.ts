@@ -60,7 +60,8 @@ export {
   type CompiledFolder,
   type CompiledKey,
   compileTree,
-  type FolderNode,
+  type FolderArray,
+  type FolderEntry,
   type SecretsTree,
   treeSchema,
 } from "./tree.js";

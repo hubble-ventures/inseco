@@ -70,7 +70,7 @@ describe("pullManifest — output paths + multi-target aliases", () => {
 
   it("writes the default .env.secrets when no output is set", async () => {
     const result = await pullManifest({
-      manifest: manifest({ tree: { clerk: { raw: ["CLERK_PUBLISHABLE_KEY"] } } }),
+      manifest: manifest({ tree: { clerk: ["CLERK_PUBLISHABLE_KEY"] } }),
       repoRoot: dir,
       envName: "development",
       provider: fakeProvider({ CLERK_PUBLISHABLE_KEY: "pk_live" }),
@@ -82,7 +82,7 @@ describe("pullManifest — output paths + multi-target aliases", () => {
   it("writes to a custom per-package output filename", async () => {
     await pullManifest({
       manifest: manifest({
-        tree: { clerk: { raw: ["CLERK_PUBLISHABLE_KEY"] } },
+        tree: { clerk: ["CLERK_PUBLISHABLE_KEY"] },
         output: ".env.local",
       }),
       repoRoot: dir,
@@ -100,7 +100,7 @@ describe("pullManifest — output paths + multi-target aliases", () => {
   it("supports `output: .env` (no separators, dotfile) for an app package", async () => {
     await pullManifest({
       manifest: manifest({
-        tree: { clerk: { raw: ["CLERK_PUBLISHABLE_KEY"] } },
+        tree: { clerk: ["CLERK_PUBLISHABLE_KEY"] },
         output: ".env",
       }),
       repoRoot: dir,
@@ -115,14 +115,14 @@ describe("pullManifest — output paths + multi-target aliases", () => {
     await pullManifest({
       manifest: manifest({
         tree: {
-          google: {
-            aliased: {
+          google: [
+            {
               GOOGLE_MAPS_API_KEY: [
                 "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY",
                 "VITE_GOOGLE_MAPS_API_KEY",
               ],
             },
-          },
+          ],
         },
         output: ".env",
       }),
@@ -144,11 +144,9 @@ describe("pullManifest — output paths + multi-target aliases", () => {
     await pullManifest({
       manifest: manifest({
         tree: {
-          stripe: {
-            aliased: {
-              STRIPE_PUBLISHABLE_KEY: ["EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY"],
-            },
-          },
+          stripe: [
+            { STRIPE_PUBLISHABLE_KEY: ["EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY"] },
+          ],
         },
         output: ".env",
       }),
@@ -174,7 +172,7 @@ describe("pullManifest — output paths + multi-target aliases", () => {
     await expect(
       pullManifest({
         manifest: manifest({
-          tree: { stripe: { raw: ["NONEXISTENT_KEY"] } },
+          tree: { stripe: ["NONEXISTENT_KEY"] },
           output: ".env",
         }),
         repoRoot: dir,
@@ -189,7 +187,7 @@ describe("pullManifest — output paths + multi-target aliases", () => {
     // the miss to a notice rather than failing the pull.
     const result = await pullManifest({
       manifest: manifest({
-        tree: { stripe: { raw: ["STRIPE_PUBLISHABLE_KEY", "STRIPE_WEBHOOK_SECRET"] } },
+        tree: { stripe: ["STRIPE_PUBLISHABLE_KEY", "STRIPE_WEBHOOK_SECRET"] },
         output: ".env",
         environments: { development: { optionalKeys: ["STRIPE_WEBHOOK_SECRET"] } },
       }),
@@ -210,7 +208,7 @@ describe("pullManifest — output paths + multi-target aliases", () => {
       });
       await pullManifest({
         manifest: manifest({
-          tree: { stripe: { raw: ["STRIPE_PUBLISHABLE_KEY"] } },
+          tree: { stripe: ["STRIPE_PUBLISHABLE_KEY"] },
           output: ".env",
           fetch: "keys",
         }),
@@ -235,11 +233,9 @@ describe("pullManifest — output paths + multi-target aliases", () => {
       await pullManifest({
         manifest: manifest({
           tree: {
-            stripe: {
-              aliased: {
-                STRIPE_PUBLISHABLE_KEY: ["EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY"],
-              },
-            },
+            stripe: [
+              { STRIPE_PUBLISHABLE_KEY: ["EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY"] },
+            ],
           },
           output: ".env",
           fetch: "keys",
@@ -263,7 +259,7 @@ describe("pullManifest — output paths + multi-target aliases", () => {
       await expect(
         pullManifest({
           manifest: manifest({
-            tree: { stripe: { raw: ["NONEXISTENT_KEY"] } },
+            tree: { stripe: ["NONEXISTENT_KEY"] },
             output: ".env",
             fetch: "keys",
           }),
@@ -297,8 +293,8 @@ describe("pullManifest — output paths + multi-target aliases", () => {
       await pullManifest({
         manifest: manifest({
           tree: {
-            a: { aliased: { TOKEN: "A_TOKEN" } },
-            b: { aliased: { TOKEN: "B_TOKEN" } },
+            a: [{ TOKEN: "A_TOKEN" }],
+            b: [{ TOKEN: "B_TOKEN" }],
           },
           output: ".env",
         }),
@@ -320,7 +316,7 @@ describe("pullManifest — output paths + multi-target aliases", () => {
       await expect(
         pullManifest({
           manifest: manifest({
-            tree: { a: { raw: ["TOKEN"] }, b: { raw: ["TOKEN"] } },
+            tree: { a: ["TOKEN"], b: ["TOKEN"] },
             output: ".env",
           }),
           repoRoot: dir,

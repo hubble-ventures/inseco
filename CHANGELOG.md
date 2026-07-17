@@ -13,30 +13,29 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   folder structure. Each of the three old fields was really an attribute of a
   specific `(folder, key)` pair; the tree binds them together, so a key's
   allowlist membership and its alias live in one place, provenance is explicit,
-  and the manifest reads like the vault. Within a folder, keys are declared in
-  two buckets — `raw` (plain keys) and `aliased` (`SOURCE → target | [targets]`)
-  — and `/`-prefixed children are **real subfolders** (nesting mirrors the vault
-  tree; `/sub` under `posthog` reads `/posthog/sub`).
+  and the manifest reads like the vault. Each folder maps to an **array** of its
+  contents: a bare string is a plain key, an object `{ SOURCE: target | [targets] }`
+  is an alias, and a `/`-prefixed entry is a **real subfolder** (its own array;
+  nesting mirrors the vault tree — `/sub` under `posthog` reads `/posthog/sub`).
 
   ```jsonc
   // before (v1)                          // after (v2)
   {                                       {
     "paths": ["posthog"],                   "tree": {
-    "aliases": {                              "posthog": {
-      "POSTHOG_PROJECT_TOKEN":                  "aliased": {
-        "VITE_POSTHOG_KEY"                        "POSTHOG_PROJECT_TOKEN": "VITE_POSTHOG_KEY"
-    },                                          }
-    "include": ["POSTHOG_PROJECT_TOKEN"]      }
-  }                                         }
-                                          }
+    "aliases": {                              "posthog": [
+      "POSTHOG_PROJECT_TOKEN":                  { "POSTHOG_PROJECT_TOKEN": "VITE_POSTHOG_KEY" }
+        "VITE_POSTHOG_KEY"                    ]
+    },                                      }
+    "include": ["POSTHOG_PROJECT_TOKEN"]  }
+  }
   ```
 
 - **Default-deny everywhere.** There is no wildcard: every emitted key must be
-  named, and an empty folder node is a schema error. The tree *is* the
+  named, and an empty folder array is a schema error. The tree *is* the
   allowlist, so the separate `include` field is **removed** — a folder emits
   exactly the keys it declares, from that folder (provenance-aware selection).
 - **`fetch: "keys"` no longer needs an allowlist.** Because the tree always
-  names every canonical key (the `aliased` map key *is* the real vault key),
+  names every canonical key (an alias entry's key *is* the real vault key),
   key mode requests those names directly — the v1 reverse-mapping from alias
   target to source is gone, and `keys` is always satisfiable. The
   `fetch`-requires-`include` cross-check is removed.
@@ -52,18 +51,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and enforces missing keys **per folder**, before merging, so a key name shared
   across folders keeps each folder's value and miss); `enforceIncludeKnown` is
   renamed `enforceKnownKeys`. New exports: `compileTree`, `treeSchema`,
-  `materializeSecrets`, and the `CompiledFolder` / `CompiledKey` / `FolderNode` /
-  `SecretsTree` / `AliasSpec` / `FolderSecrets` types.
+  `materializeSecrets`, and the `CompiledFolder` / `CompiledKey` / `FolderEntry` /
+  `FolderArray` / `SecretsTree` / `AliasSpec` / `FolderSecrets` types.
 - **Schema** rewritten around `tree` and published at `@2`.
 
 ### Migration
 
-Convert each `secrets.json`: turn every `paths` entry into a `tree` folder;
-move `aliases` sources into that folder's `aliased` bucket; put remaining
-`include` (or all wanted) keys into `raw`. Point `$schema` at `…/infisicml@2/…`.
-Behavior note: an `aliased` key now emits **both** its canonical name and the
-alias target(s) — v1 could suppress the canonical via `include`; v2 does not
-(the security boundary is default-deny provenance, not alias suppression).
+Convert each `secrets.json`: turn every `paths` entry into a `tree` folder whose
+value is an **array** of its keys; list plain keys as bare strings and each
+`aliases` source as an `{ SOURCE: target }` object in that array; keep only the
+keys you want (the array is the allowlist). Point `$schema` at `…/infisicml@2/…`.
+Behavior note: an alias entry now emits **both** its canonical name and the
+target(s) — v1 could suppress the canonical via `include`; v2 does not (the
+security boundary is default-deny provenance, not alias suppression).
 
 ## [1.2.1] - 2026-07-17
 

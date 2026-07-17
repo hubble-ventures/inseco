@@ -1,12 +1,12 @@
 import { z } from "zod";
 
-// A folder name (a top-level `tree` key or the literal path of a folder node).
-// Same character set as v1 `paths`: lowercase, digits, `_ - /`.
+// A folder name (a top-level `tree` key or the literal path of a folder). Same
+// character set as v1 `paths`: lowercase, digits, `_ - /`.
 const folderNamePattern = /^[a-z0-9_/-]+$/;
 
-// A subfolder child key: a `/`-prefixed segment (e.g. `/sub`, `/vendor/app`).
-// The leading slash is what distinguishes a subfolder from the reserved `raw` /
-// `aliased` buckets and from a key — env var names never start with `/`.
+// A subfolder entry key: a `/`-prefixed segment (e.g. `/sub`, `/vendor/app`).
+// The leading slash distinguishes a subfolder from an alias source — env var
+// names never start with `/`.
 const subfolderPattern = /^\/[a-z0-9_/-]+$/;
 
 const envVarNamePattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -14,103 +14,119 @@ const envVarNameSchema = z
   .string()
   .regex(envVarNamePattern, "must be a valid env var name");
 
-// `raw`: plain keys emitted as-is. Non-empty — an empty array is a mistake
-// (omit the bucket instead).
-const rawSchema = z
-  .array(envVarNameSchema)
-  .min(1, "raw must be a non-empty array of env var names");
-
-// `aliased`: canonical vault key -> the extra env var name(s) a build/runtime
-// expects (e.g. POSTHOG_PROJECT_TOKEN -> VITE_POSTHOG_KEY). The map key is the
-// real vault key (the alias *source*); the value is one or more alias targets.
-// Non-empty — an empty `aliased` bucket declares no keys, so it would compile to
-// nothing and silently fetch/write zero secrets for the folder; reject it to
-// match the JSON schema's `minProperties: 1` (omit the bucket instead).
-const aliasedSchema = z
-  .record(
-    envVarNameSchema,
-    z.union([envVarNameSchema, z.array(envVarNameSchema).min(1)])
-  )
-  .refine((aliases) => Object.keys(aliases).length > 0, {
-    message: "aliased must be a non-empty object of env var aliases",
-  });
+// An alias value: the extra env var name(s) a build/runtime expects. One target,
+// or several.
+const aliasTargetsSchema = z.union([
+  envVarNameSchema,
+  z.array(envVarNameSchema).min(1),
+]);
 
 /** One alias target name, or several. */
 export type AliasSpec = string | string[];
 
 /**
- * A node in the folder tree. Declares the keys pulled from *this* folder via the
- * `raw` and `aliased` buckets, plus any number of `/`-prefixed subfolders. The
- * index signature is intentionally `unknown` (a supertype of the bucket types)
- * so `/child` values type-check while `raw`/`aliased` keep their precise types.
+ * One entry in a folder's contents array. Either:
+ * - a **string** — a plain key emitted as-is, or
+ * - an **object** whose entries are, per key:
+ *   - `SOURCE: target | [targets]` — an alias (the canonical vault key `SOURCE`
+ *     is emitted and copied to each target), or
+ *   - `"/sub": [ ... ]` — a subfolder (its own contents array).
  */
-export type FolderNode = {
-  raw?: string[];
-  aliased?: Record<string, AliasSpec>;
-} & { [subfolder: string]: unknown };
+export type FolderEntry = string | { [key: string]: AliasSpec | FolderArray };
 
-/** The manifest's `tree`: top-level folder name -> node. */
-export type SecretsTree = Record<string, FolderNode>;
+/** A folder's contents: a non-empty array of {@link FolderEntry}. */
+export type FolderArray = FolderEntry[];
 
-/** A single emitted key resolved from a folder node (canonical name + aliases). */
+/** The manifest's `tree`: top-level folder name -> contents array. */
+export type SecretsTree = Record<string, FolderArray>;
+
+/** A single emitted key resolved from a folder (canonical name + aliases). */
 export type CompiledKey = { key: string; aliases: string[] };
 
 /** A folder path plus the exact keys to emit from it (provenance-aware). */
 export type CompiledFolder = { path: string; keys: CompiledKey[] };
 
+function pushIssues(
+  ctx: z.RefinementCtx,
+  result: z.SafeParseReturnType<unknown, unknown>,
+  at: (string | number)[]
+): void {
+  if (result.success) return;
+  for (const issue of result.error.issues) {
+    ctx.addIssue({ ...issue, path: [...at, ...issue.path] });
+  }
+}
+
 /**
- * Recursively validate a folder node. Zod's recursive-type inference is awkward
- * for the mixed fixed-buckets + patterned-subfolders shape, so structure and
- * recursion are validated by hand here (with the leaf buckets delegated to
- * `rawSchema` / `aliasedSchema`), giving precise, path-anchored messages.
+ * Recursively validate a folder's contents array. Zod's recursive inference is
+ * awkward for the mixed string / alias-object / subfolder-object element shape,
+ * so structure and recursion are validated by hand here (leaf checks delegated
+ * to the small env-var / alias-target schemas), giving precise, path-anchored
+ * messages.
  */
-function validateFolderNode(
-  node: unknown,
+function validateFolderArray(
+  value: unknown,
   ctx: z.RefinementCtx,
   path: (string | number)[]
 ): void {
-  if (typeof node !== "object" || node === null || Array.isArray(node)) {
+  if (!Array.isArray(value)) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path,
-      message: "folder node must be an object",
+      message: "folder contents must be an array",
     });
     return;
   }
-
-  const keys = Object.keys(node as Record<string, unknown>);
-  if (keys.length === 0) {
+  if (value.length === 0) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path,
       message:
-        'folder node must declare at least one of: "raw", "aliased", or a "/"-prefixed subfolder',
+        'folder contents must be a non-empty array of keys, alias objects, or "/"-prefixed subfolders',
+    });
+  }
+  value.forEach((entry, i) => validateFolderEntry(entry, ctx, [...path, i]));
+}
+
+function validateFolderEntry(
+  entry: unknown,
+  ctx: z.RefinementCtx,
+  path: (string | number)[]
+): void {
+  if (typeof entry === "string") {
+    pushIssues(ctx, envVarNameSchema.safeParse(entry), path);
+    return;
+  }
+  if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path,
+      message:
+        'folder entry must be a key name (string), an alias object, or a "/"-prefixed subfolder',
+    });
+    return;
+  }
+
+  const keys = Object.keys(entry as Record<string, unknown>);
+  if (keys.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path,
+      message: "object entry must declare at least one alias or subfolder",
     });
   }
 
-  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+  for (const [key, value] of Object.entries(entry as Record<string, unknown>)) {
     const at = [...path, key];
-    if (key === "raw") {
-      const r = rawSchema.safeParse(value);
-      if (!r.success) {
-        for (const issue of r.error.issues) {
-          ctx.addIssue({ ...issue, path: [...at, ...issue.path] });
-        }
-      }
-    } else if (key === "aliased") {
-      const r = aliasedSchema.safeParse(value);
-      if (!r.success) {
-        for (const issue of r.error.issues) {
-          ctx.addIssue({ ...issue, path: [...at, ...issue.path] });
-        }
-      }
-    } else if (subfolderPattern.test(key)) {
-      validateFolderNode(value, ctx, at);
+    if (subfolderPattern.test(key)) {
+      validateFolderArray(value, ctx, at);
+    } else if (envVarNamePattern.test(key)) {
+      pushIssues(ctx, aliasTargetsSchema.safeParse(value), at);
     } else {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: at,
-        message: `unknown property "${key}"; folder children must be "raw", "aliased", or a "/"-prefixed subfolder`,
+        message: `invalid entry key "${key}"; must be an env var name (alias) or a "/"-prefixed subfolder`,
       });
     }
   }
@@ -118,9 +134,10 @@ function validateFolderNode(
 
 /**
  * Schema for the manifest's `tree`. Keys are folder names; each value is a
- * folder node validated recursively. Cast to the precise {@link SecretsTree}
- * type — the base `z.record` infers `Record<string, unknown>`, but every value
- * is structurally a {@link FolderNode} once `validateFolderNode` passes.
+ * folder contents array validated recursively. Cast to the precise
+ * {@link SecretsTree} type — the base `z.record` infers `Record<string,
+ * unknown>`, but every value is structurally a {@link FolderArray} once
+ * {@link validateFolderArray} passes.
  */
 export const treeSchema = z
   .record(
@@ -134,43 +151,53 @@ export const treeSchema = z
         message: "tree must declare at least one folder",
       });
     }
-    for (const [name, node] of Object.entries(tree)) {
-      validateFolderNode(node, ctx, [name]);
+    for (const [name, entries] of Object.entries(tree)) {
+      validateFolderArray(entries, ctx, [name]);
     }
   }) as unknown as z.ZodType<SecretsTree>;
 
 /**
  * Flatten a validated folder tree into an ordered list of {@link CompiledFolder}.
- * `raw` entries carry no aliases; each `aliased` source carries its target(s).
- * A node's own keys are emitted before recursing into its `/`-prefixed
- * subfolders, so declaration order is preserved (last folder wins on a genuine
- * cross-folder name collision at merge time).
+ * String entries carry no aliases; each `SOURCE: target(s)` entry carries its
+ * target(s). A folder's own keys are emitted before recursing into its
+ * `/`-prefixed subfolders, so declaration order is preserved (last folder wins
+ * on a genuine cross-folder name collision at merge time).
  */
 export function compileTree(tree: SecretsTree): CompiledFolder[] {
   const out: CompiledFolder[] = [];
-  for (const [name, node] of Object.entries(tree)) {
-    walk(name, node, out);
+  for (const [name, entries] of Object.entries(tree)) {
+    walk(name, entries, out);
   }
   return out;
 }
 
-function walk(path: string, node: FolderNode, out: CompiledFolder[]): void {
+function walk(path: string, entries: FolderArray, out: CompiledFolder[]): void {
   const keys: CompiledKey[] = [];
-  for (const key of node.raw ?? []) {
-    keys.push({ key, aliases: [] });
+  const subfolders: Array<[string, FolderArray]> = [];
+
+  for (const entry of entries) {
+    if (typeof entry === "string") {
+      keys.push({ key: entry, aliases: [] });
+      continue;
+    }
+    for (const [key, value] of Object.entries(entry)) {
+      if (key.startsWith("/")) {
+        // Subfolder: strip the leading `/` and join onto the parent path.
+        subfolders.push([`${path}/${key.slice(1)}`, value as FolderArray]);
+      } else {
+        const targets = value as AliasSpec;
+        keys.push({
+          key,
+          aliases: Array.isArray(targets) ? targets : [targets],
+        });
+      }
+    }
   }
-  for (const [source, targets] of Object.entries(node.aliased ?? {})) {
-    keys.push({
-      key: source,
-      aliases: Array.isArray(targets) ? targets : [targets],
-    });
-  }
+
   if (keys.length > 0) {
     out.push({ path, keys });
   }
-  for (const [childKey, childNode] of Object.entries(node)) {
-    if (childKey === "raw" || childKey === "aliased") continue;
-    // Subfolder: strip the leading `/` and join onto the parent path.
-    walk(`${path}/${childKey.slice(1)}`, childNode as FolderNode, out);
+  for (const [subPath, subEntries] of subfolders) {
+    walk(subPath, subEntries, out);
   }
 }

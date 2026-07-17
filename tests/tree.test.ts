@@ -3,8 +3,8 @@ import { loadManifestJson, resolveCompiledFolders } from "../src/manifest.js";
 import { compileTree } from "../src/tree.js";
 
 describe("compileTree", () => {
-  it("compiles raw keys into a folder with no aliases", () => {
-    const folders = compileTree({ stripe: { raw: ["A", "B"] } });
+  it("compiles bare string entries into keys with no aliases", () => {
+    const folders = compileTree({ stripe: ["A", "B"] });
     expect(folders).toEqual([
       {
         path: "stripe",
@@ -16,9 +16,9 @@ describe("compileTree", () => {
     ]);
   });
 
-  it("compiles an aliased source with a single target", () => {
+  it("compiles an alias object with a single target", () => {
     const folders = compileTree({
-      posthog: { aliased: { POSTHOG_PROJECT_TOKEN: "VITE_POSTHOG_KEY" } },
+      posthog: [{ POSTHOG_PROJECT_TOKEN: "VITE_POSTHOG_KEY" }],
     });
     expect(folders).toEqual([
       {
@@ -28,16 +28,16 @@ describe("compileTree", () => {
     ]);
   });
 
-  it("compiles an aliased source with several targets", () => {
+  it("compiles an alias object with several targets", () => {
     const folders = compileTree({
-      google: {
-        aliased: {
+      google: [
+        {
           GOOGLE_MAPS_API_KEY: [
             "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY",
             "VITE_GOOGLE_MAPS_API_KEY",
           ],
         },
-      },
+      ],
     });
     expect(folders[0].keys[0]).toEqual({
       key: "GOOGLE_MAPS_API_KEY",
@@ -48,9 +48,9 @@ describe("compileTree", () => {
     });
   });
 
-  it("emits raw before aliased within a folder", () => {
+  it("emits keys in array order, mixing bare and aliased", () => {
     const folders = compileTree({
-      clerk: { raw: ["CLERK_SECRET_KEY"], aliased: { CLERK_PUBLISHABLE_KEY: "V" } },
+      clerk: ["CLERK_SECRET_KEY", { CLERK_PUBLISHABLE_KEY: "V" }],
     });
     expect(folders[0].keys.map((k) => k.key)).toEqual([
       "CLERK_SECRET_KEY",
@@ -58,12 +58,22 @@ describe("compileTree", () => {
     ]);
   });
 
+  it("compiles several aliases in one object entry", () => {
+    const folders = compileTree({
+      vendor: [{ A: "A_ALIAS", B: ["B1", "B2"] }],
+    });
+    expect(folders[0].keys).toEqual([
+      { key: "A", aliases: ["A_ALIAS"] },
+      { key: "B", aliases: ["B1", "B2"] },
+    ]);
+  });
+
   it("joins a subfolder path and emits parent before child", () => {
     const folders = compileTree({
-      posthog: {
-        raw: ["POSTHOG_PROJECT_TOKEN"],
-        "/sub": { raw: ["KEY_2"], aliased: { KEY_3: "KEY_ALIAS" } },
-      },
+      posthog: [
+        "POSTHOG_PROJECT_TOKEN",
+        { "/sub": ["KEY_2", { KEY_3: "KEY_ALIAS" }] },
+      ],
     });
     expect(folders.map((f) => f.path)).toEqual(["posthog", "posthog/sub"]);
     expect(folders[1].keys).toEqual([
@@ -72,74 +82,72 @@ describe("compileTree", () => {
     ]);
   });
 
-  it("skips a subfolder-only node itself but still emits its children", () => {
-    const folders = compileTree({
-      vendor: { "/app": { raw: ["A"] } },
-    });
-    // The `vendor` node declares no direct keys, so it produces no folder entry.
-    expect(folders).toEqual([{ path: "vendor/app", keys: [{ key: "A", aliases: [] }] }]);
+  it("skips a subfolder-only folder itself but still emits its children", () => {
+    const folders = compileTree({ vendor: [{ "/app": ["A"] }] });
+    // `vendor` declares no direct keys, so it produces no folder entry.
+    expect(folders).toEqual([
+      { path: "vendor/app", keys: [{ key: "A", aliases: [] }] },
+    ]);
   });
 
   it("supports multi-segment subfolder names", () => {
-    const folders = compileTree({ a: { "/b/c": { raw: ["K"] } } });
+    const folders = compileTree({ a: [{ "/b/c": ["K"] }] });
     expect(folders[0].path).toBe("a/b/c");
   });
 });
 
 describe("tree schema validation", () => {
-  it("rejects an empty folder node", () => {
-    expect(() => loadManifestJson({ tree: { stripe: {} } })).toThrow();
+  it("rejects an empty folder array", () => {
+    expect(() => loadManifestJson({ tree: { stripe: [] } })).toThrow();
   });
 
   it("rejects an empty tree", () => {
     expect(() => loadManifestJson({ tree: {} })).toThrow();
   });
 
-  it("rejects an unknown bucket name", () => {
-    expect(() =>
-      loadManifestJson({ tree: { stripe: { keys: ["A"] } } })
-    ).toThrow();
+  it("rejects an empty object entry (no alias or subfolder)", () => {
+    expect(() => loadManifestJson({ tree: { stripe: [{}] } })).toThrow();
   });
 
-  it("rejects an empty aliased bucket", () => {
-    // A node with only `aliased: {}` is non-empty at the node level but declares
-    // no keys — it would compile to nothing and silently emit zero secrets.
-    expect(() =>
-      loadManifestJson({ tree: { stripe: { aliased: {} } } })
-    ).toThrow();
+  it("rejects an invalid env var name as a bare key", () => {
+    expect(() => loadManifestJson({ tree: { stripe: ["bad-name"] } })).toThrow();
   });
 
-  it("rejects an invalid env var name in raw", () => {
+  it("rejects an entry key that is neither an env var nor a subfolder", () => {
     expect(() =>
-      loadManifestJson({ tree: { stripe: { raw: ["bad-name"] } } })
+      loadManifestJson({ tree: { stripe: [{ "bad-key": "X" }] } })
     ).toThrow();
   });
 
   it("rejects an invalid alias target", () => {
     expect(() =>
-      loadManifestJson({ tree: { stripe: { aliased: { A: "1-bad" } } } })
+      loadManifestJson({ tree: { stripe: [{ A: "1-bad" }] } })
     ).toThrow();
   });
 
-  it("rejects an empty raw array", () => {
+  it("rejects an empty alias target array", () => {
     expect(() =>
-      loadManifestJson({ tree: { stripe: { raw: [] } } })
+      loadManifestJson({ tree: { stripe: [{ A: [] }] } })
     ).toThrow();
+  });
+
+  it("rejects a non-string/non-object entry", () => {
+    expect(() => loadManifestJson({ tree: { stripe: [123] } })).toThrow();
   });
 
   it("rejects an invalid folder name", () => {
     expect(() =>
-      loadManifestJson({ tree: { "Bad Folder": { raw: ["A"] } } })
+      loadManifestJson({ tree: { "Bad Folder": ["A"] } })
     ).toThrow();
   });
 
   it("accepts a valid nested tree", () => {
     const m = loadManifestJson({
       tree: {
-        posthog: {
-          aliased: { POSTHOG_PROJECT_TOKEN: "VITE_POSTHOG_KEY" },
-          "/sub": { raw: ["KEY_2"] },
-        },
+        posthog: [
+          { POSTHOG_PROJECT_TOKEN: "VITE_POSTHOG_KEY" },
+          { "/sub": ["KEY_2"] },
+        ],
       },
     });
     expect(resolveCompiledFolders(m).map((f) => f.path)).toEqual([
@@ -151,12 +159,12 @@ describe("tree schema validation", () => {
 
 describe("resolveCompiledFolders — profile replace semantics", () => {
   const m = loadManifestJson({
-    tree: { clerk: { raw: ["CLERK_SECRET_KEY"] } },
+    tree: { clerk: ["CLERK_SECRET_KEY"] },
     profiles: {
       deploy: {
         tree: {
-          clerk: { raw: ["CLERK_SECRET_KEY"] },
-          fly: { raw: ["FLY_API_TOKEN"] },
+          clerk: ["CLERK_SECRET_KEY"],
+          fly: ["FLY_API_TOKEN"],
         },
       },
     },
