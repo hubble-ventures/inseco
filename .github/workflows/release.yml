@@ -1,40 +1,93 @@
 name: Release
 
-# Cut a release by pushing a semver tag:
+# Releases are automatic: merge a PR that bumps `version` in package.json and
+# this workflow tags it and publishes — no manual `git tag` needed. (Manually
+# pushing a `vX.Y.Z` tag still works too.)
 #
-#   npm version 1.2.3 --no-git-tag-version && git commit -am "release: v1.2.3"
-#   git tag v1.2.3 && git push origin main --tags
+# On every push to main it reads package.json; if that version has no matching
+# `vX.Y.Z` tag yet, then in one run it:
+#   1. builds + tests,
+#   2. creates and pushes the `vX.Y.Z` tag,
+#   3. publishes `infisicml` to npm via **trusted publishing** (OIDC) — no
+#      NPM_TOKEN secret, provenance attached automatically,
+#   4. creates a GitHub Release with notes pulled from CHANGELOG.md,
+#   5. moves the floating major tag (e.g. `v2`) so consumers can pin
+#      `hubble-ventures/infisicml/action@v2`.
 #
-# This workflow then:
-#   1. builds + tests the tagged commit,
-#   2. publishes `infisicml` to npm via **trusted publishing** (OIDC) — no NPM_TOKEN
-#      secret, provenance attached automatically,
-#   3. creates a GitHub Release with notes pulled from CHANGELOG.md,
-#   4. moves the floating major tag (e.g. `v1`) to this commit so consumers can
-#      pin `hubble-ventures/infisicml/action@v1`.
+# A main push that doesn't bump the version is a cheap no-op (the guard job
+# exits and nothing else runs). The publish step is also idempotent — a version
+# already on npm is skipped — so re-runs never fail.
+#
+# The tag is created by this same run rather than by re-triggering on a tag
+# push: a tag pushed with the workflow's GITHUB_TOKEN intentionally does NOT
+# start another workflow, so keeping every step here avoids a PAT and keeps npm
+# trusted publishing bound to this one workflow file.
 #
 # Bootstrapping note: npm trusted publishing must be configured against an
-# existing package, so the FIRST publish (v1.0.0) is done locally to reserve the
-# name (see README "Publishing"). The publish step below is idempotent — if the
-# tagged version already exists on npm it is skipped, so re-running or the first
-# tag push never fails.
+# existing package, so the FIRST publish of a package name is done locally to
+# reserve it (see README "Releasing").
 
 on:
   push:
+    branches: [main]
     tags:
       - "v*.*.*"
 
 permissions:
-  contents: write # create the GitHub Release + move the major tag
+  contents: write # create the GitHub Release + push tags
   id-token: write # OIDC: npm trusted publishing + provenance
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
+  # Decide whether this push should release, and resolve the version/tag. On a
+  # tag push: always release (and verify the tag matches package.json). On a main
+  # push: release only when package.json's version has no matching tag yet.
+  guard:
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.decide.outputs.release }}
+      version: ${{ steps.decide.outputs.version }}
+      tag: ${{ steps.decide.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: decide
+        run: |
+          set -euo pipefail
+          PKG="$(node -p "require('./package.json').version")"
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF_NAME}"
+            if [ "$TAG" != "v$PKG" ]; then
+              echo "::error::tag $TAG does not match package.json version $PKG"
+              exit 1
+            fi
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            TAG="v$PKG"
+            if git ls-remote --tags --exit-code origin "refs/tags/$TAG" >/dev/null 2>&1; then
+              echo "::notice::$TAG already tagged — nothing to release"
+              echo "release=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "::notice::version bumped to $PKG — releasing $TAG"
+              echo "release=true" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+          echo "version=$PKG" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
   release:
+    needs: guard
+    if: needs.guard.outputs.release == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.sha }}
 
       - uses: actions/setup-node@v4
         with:
@@ -50,17 +103,6 @@ jobs:
 
       - run: npm ci
 
-      - name: Verify tag matches package.json version
-        run: |
-          TAG="${GITHUB_REF_NAME#v}"
-          PKG="$(node -p "require('./package.json').version")"
-          if [ "$TAG" != "$PKG" ]; then
-            echo "::error::tag v$TAG does not match package.json version $PKG"
-            exit 1
-          fi
-          echo "version=$PKG" >> "$GITHUB_OUTPUT"
-        id: version
-
       - run: npm run type-check
       - run: npm run build
 
@@ -73,9 +115,24 @@ jobs:
 
       - run: npm test
 
+      # Create the release tag now that build + tests have passed (a main-push
+      # release). A manually-pushed tag already exists, so this is a no-op there.
+      # Pushing with GITHUB_TOKEN intentionally does NOT re-trigger this workflow.
+      - name: Ensure release tag exists
+        run: |
+          set -euo pipefail
+          TAG="${{ needs.guard.outputs.tag }}"
+          if git ls-remote --tags --exit-code origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "$TAG already exists."
+          else
+            git tag "$TAG" "$GITHUB_SHA"
+            git push origin "refs/tags/$TAG"
+            echo "Created $TAG -> $GITHUB_SHA"
+          fi
+
       - name: Publish to npm (trusted publishing, idempotent)
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          VERSION="${{ needs.guard.outputs.version }}"
           if npm view "@hubble-ventures/infisicml@$VERSION" version >/dev/null 2>&1; then
             echo "@hubble-ventures/infisicml@$VERSION already on npm — skipping publish."
           else
@@ -83,9 +140,8 @@ jobs:
           fi
 
       - name: Extract release notes from CHANGELOG
-        id: notes
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          VERSION="${{ needs.guard.outputs.version }}"
           # Pull the section for this version out of CHANGELOG.md (keep-a-changelog).
           awk -v v="$VERSION" '
             BEGIN { gsub(/\./, "\\.", v) } # match the version literally, not as a regex
@@ -101,25 +157,25 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          TAG="${{ needs.guard.outputs.tag }}"
           # Edit-or-create so re-running a partially-failed release (e.g. the
           # tag-move step erroring after the release was made) doesn't hard-fail
           # on "release already exists". (`gh release create` has no --clobber;
           # that flag is for `gh release upload`.)
-          if gh release view "v$VERSION" >/dev/null 2>&1; then
-            gh release edit "v$VERSION" \
-              --title "v$VERSION" \
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" \
+              --title "$TAG" \
               --notes-file release-notes.md
           else
-            gh release create "v$VERSION" \
-              --title "v$VERSION" \
+            gh release create "$TAG" \
+              --title "$TAG" \
               --notes-file release-notes.md \
               --verify-tag
           fi
 
       - name: Move floating major tag
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          VERSION="${{ needs.guard.outputs.version }}"
           # Skip prereleases (e.g. 1.0.0-rc.1) — they should not move the major tag.
           case "$VERSION" in
             *-*) echo "prerelease $VERSION — not moving major tag"; exit 0 ;;

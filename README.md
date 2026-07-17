@@ -273,19 +273,24 @@ for (const manifest of discoverManifests(config)) {
 
 ## Releasing
 
-Releases are cut by pushing a semver tag; [`.github/workflows/release.yml`](./.github/workflows/release.yml) does the rest:
+**Releases are automatic — you don't tag anything.** Bump the version in a PR
+and merging it to `main` cuts the release:
 
 ```bash
-npm version 1.2.3 --no-git-tag-version
-git commit -am "release: v1.2.3"
-git tag v1.2.3 && git push origin main --tags
+npm run release -- minor    # or patch / major / 2.1.0 — bumps package.json + rebuilds dist
+# edit CHANGELOG.md: add the new version's section
+git commit -am "release: v2.1.0"
+# open a PR, merge it → release fires
 ```
 
-The workflow builds + tests the tagged commit, publishes to npm via **trusted
-publishing** (OIDC — no `NPM_TOKEN` secret, provenance attached automatically),
-creates a GitHub Release from the matching [`CHANGELOG.md`](./CHANGELOG.md) section, and
-moves the floating major tag (e.g. `v2`) to the release commit. The publish step is idempotent — a
-version already on npm is skipped.
+On the push to `main`, [`.github/workflows/release.yml`](./.github/workflows/release.yml)
+reads `package.json`; if that version isn't tagged yet it builds + tests, **creates and
+pushes the `vX.Y.Z` tag**, publishes to npm via **trusted publishing** (OIDC — no
+`NPM_TOKEN` secret, provenance attached automatically), creates a GitHub Release from the
+matching [`CHANGELOG.md`](./CHANGELOG.md) section, and moves the floating major tag (e.g.
+`v2`). A main push that doesn't bump the version is a no-op, and the publish step is
+idempotent — a version already on npm is skipped. Manually pushing a `vX.Y.Z` tag still
+works if you ever need it.
 
 > **First publish (one time).** The `@hubble-ventures` npm **organization** must exist,
 > and npm trusted publishing can only be configured against an *existing* package — so
@@ -299,8 +304,8 @@ version already on npm is skipped.
 > (`publishConfig.access: public` in `package.json` enforces this even if the flag is
 > omitted.) Then, in the package's npm settings, add a **trusted publisher** for
 > `hubble-ventures/infisicml` → workflow `release.yml`, with **no environment** (the release
-> job sets none — the OIDC claims must match). Every subsequent tag push publishes
-> automatically with no token.
+> job sets none — the OIDC claims must match). Every subsequent version bump merged to
+> `main` publishes automatically with no token.
 
 ## Design
 
