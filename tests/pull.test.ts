@@ -57,7 +57,7 @@ describe("pullManifest — output paths + multi-target aliases", () => {
   let dir: string;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "infiscml-pull-"));
+    dir = mkdtempSync(join(tmpdir(), "infisicml-pull-"));
   });
 
   afterEach(() => {

@@ -5,5 +5,5 @@
     "packages": [{ "id": "postgres", "dir": "infra/postgres" }]
   },
   "auth": { "oidcAudience": "https://example.com/org" },
-  "hooks": { "advertiseKeys": [{ "envVar": "INFISCML_FLY_KEYS", "scope": "runtime" }] }
+  "hooks": { "advertiseKeys": [{ "envVar": "INFISICML_FLY_KEYS", "scope": "runtime" }] }
 }

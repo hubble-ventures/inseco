@@ -14,7 +14,7 @@ export function appendSecretToGithubEnv(
     process.stdout.write(`::add-mask::${masked}\n`);
   }
 
-  let delim = `INFISCML_${key}_${Date.now()}${process.hrtime.bigint()}`;
+  let delim = `INFISICML_${key}_${Date.now()}${process.hrtime.bigint()}`;
   while (value.includes(delim)) {
     delim = `${delim}_`;
   }

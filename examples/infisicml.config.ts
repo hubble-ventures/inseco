@@ -1,7 +1,7 @@
-import { defineConfig } from "@hubble-ventures/infiscml";
+import { defineConfig } from "@hubble-ventures/infisicml";
 
 /**
- * Example infiscml.config.ts placed at your monorepo root. Infiscml finds the
+ * Example infisicml.config.ts placed at your monorepo root. Infisicml finds the
  * repo root by walking up from the cwd until it sees this file.
  */
 export default defineConfig({
@@ -9,7 +9,7 @@ export default defineConfig({
   // Or set projectIdEnvFile / the INFISICAL_PROJECT_ID env var instead.
   projectIdEnvFile: ".env.infisical",
 
-  // How Infiscml discovers per-package secrets.json manifests.
+  // How Infisicml discovers per-package secrets.json manifests.
   discovery: {
     // Scan these parents one level deep; child dir name becomes the package id.
     roots: ["apps", "packages", "services"],
@@ -24,6 +24,6 @@ export default defineConfig({
   // forwards exactly those (e.g. `flyctl secrets import`), keeping secrets.json
   // the source of truth for what a deploy forwards.
   hooks: {
-    advertiseKeys: [{ envVar: "INFISCML_FLY_KEYS", scope: "runtime" }],
+    advertiseKeys: [{ envVar: "INFISICML_FLY_KEYS", scope: "runtime" }],
   },
 });

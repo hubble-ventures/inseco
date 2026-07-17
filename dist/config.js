@@ -2,14 +2,14 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseDotenv } from "./dotenv.js";
-/** Identity helper for type-safe `infiscml.config.ts` files. */
+/** Identity helper for type-safe `infisicml.config.ts` files. */
 export function defineConfig(config) {
     return config;
 }
 const CONFIG_FILENAMES = [
-    "infiscml.config.json",
-    "infiscml.config.mjs",
-    "infiscml.config.js",
+    "infisicml.config.json",
+    "infisicml.config.mjs",
+    "infisicml.config.js",
 ];
 function findConfigFile(startDir) {
     let dir = resolve(startDir);
@@ -32,7 +32,7 @@ async function readConfigFile(file) {
     }
     const mod = (await import(pathToFileURL(file).href));
     if (!mod.default) {
-        throw new Error(`${file} must export a default InfiscmlConfig`);
+        throw new Error(`${file} must export a default InfisicmlConfig`);
     }
     return mod.default;
 }

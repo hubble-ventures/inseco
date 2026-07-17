@@ -1,5 +1,5 @@
 /**
- * How Infiscml discovers per-package `secrets.json` manifests. Discovery is
+ * How Infisicml discovers per-package `secrets.json` manifests. Discovery is
  * driven entirely by config, so no repo layout is baked into the tool.
  */
 export type DiscoveryConfig = {
@@ -32,7 +32,7 @@ export type AdvertiseKeysHook = {
      */
     scope?: "runtime" | "all";
 };
-export type InfiscmlConfig = {
+export type InfisicmlConfig = {
     /** Infisical project id for the local CLI provider. */
     projectId?: string;
     /** dotenv file (relative to repo root) providing INFISICAL_PROJECT_ID. */
@@ -48,11 +48,11 @@ export type InfiscmlConfig = {
         advertiseKeys?: AdvertiseKeysHook[];
     };
 };
-export type ResolvedConfig = InfiscmlConfig & {
+export type ResolvedConfig = InfisicmlConfig & {
     repoRoot: string;
     projectId: string;
 };
-/** Identity helper for type-safe `infiscml.config.ts` files. */
-export declare function defineConfig(config: InfiscmlConfig): InfiscmlConfig;
+/** Identity helper for type-safe `infisicml.config.ts` files. */
+export declare function defineConfig(config: InfisicmlConfig): InfisicmlConfig;
 export declare function loadConfig(cwd?: string): Promise<ResolvedConfig>;
 //# sourceMappingURL=config.d.ts.map

@@ -50,7 +50,7 @@ export async function pullManifest(options) {
     // drop a trailing "" sentinel, so append the trailing newline explicitly —
     // otherwise the first secret gets glued onto the "# Generated" line.
     const header = `${[
-        "# Pulled from Infisical — do not edit. Refresh: infiscml pull",
+        "# Pulled from Infisical — do not edit. Refresh: infisicml pull",
         `# Package: ${manifest.id}`,
         `# Environment: ${envName}`,
         profile ? `# Profile: ${profile}` : "",
