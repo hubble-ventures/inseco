@@ -48,7 +48,7 @@ export async function pullManifest(options) {
     // explicitly — otherwise the first secret gets glued onto the "# Generated"
     // line.
     const header = `${[
-        "# Pulled from Infisical — do not edit. Refresh: inseco pull",
+        "# Pulled from Infisical — do not edit. Refresh: infiscml pull",
         `# Package: ${manifest.id}`,
         `# Environment: ${envName}`,
         profile ? `# Profile: ${profile}` : "",
