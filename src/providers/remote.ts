@@ -7,14 +7,14 @@ export type RemoteProviderOptions = {
   projectSlug: string;
   /**
    * Infisical machine-identity id bound to a GitHub OIDC auth method. This is
-   * the only CI auth lane infiscml supports — there is no client-id/secret
+   * the only CI auth lane infisicml supports — there is no client-id/secret
    * fallback.
    */
   identityId: string;
   /**
    * OIDC audience — must match one of the Infisical machine identity's bound
    * audiences. There is no universal default, so it is only appended to the
-   * GitHub token request when set. Configure it per repo (see InfiscmlConfig.auth).
+   * GitHub token request when set. Configure it per repo (see InfisicmlConfig.auth).
    */
   oidcAudience?: string;
   fetchFn?: typeof fetch;

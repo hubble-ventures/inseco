@@ -59,7 +59,7 @@ export async function runExportGha(options: ExportGhaOptions): Promise<void> {
   const identityId = options.identityId ?? process.env.INFISICAL_IDENTITY_ID;
   if (!identityId) {
     throw new Error(
-      "INFISICAL_IDENTITY_ID required — infiscml CI auth is GitHub OIDC only (no client-id/secret fallback). Set `permissions: id-token: write` on the job."
+      "INFISICAL_IDENTITY_ID required — infisicml CI auth is GitHub OIDC only (no client-id/secret fallback). Set `permissions: id-token: write` on the job."
     );
   }
 

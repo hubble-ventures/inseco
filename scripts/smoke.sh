@@ -25,13 +25,13 @@ if [ ! -f "$CLI" ]; then
   exit 1
 fi
 
-run() { echo "== infiscml $* =="; ( cd "$FIXTURE" && node "$CLI" "$@" ); echo; }
+run() { echo "== infisicml $* =="; ( cd "$FIXTURE" && node "$CLI" "$@" ); echo; }
 
 run validate
 run list
 run paths api --comma
 
-echo "== infiscml pull api (CI stub, no Infisical) =="
+echo "== infisicml pull api (CI stub, no Infisical) =="
 STUB="$FIXTURE/apps/api/.env.secrets"
 rm -f "$STUB"
 ( cd "$FIXTURE" && CI=true INFISICAL_PROJECT_ID=smoke node "$CLI" pull api )

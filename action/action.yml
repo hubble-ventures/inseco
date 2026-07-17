@@ -1,12 +1,12 @@
-name: Load Infisical secrets (infiscml)
+name: Load Infisical secrets (infisicml)
 description: >-
-  Fetch secrets from Infisical into the job environment via infiscml export-gha.
+  Fetch secrets from Infisical into the job environment via infisicml export-gha.
   Authentication is GitHub OIDC only — the calling job MUST set
   `permissions: id-token: write`.
 
 inputs:
   package-id:
-    description: 'Package id from the infiscml registry (e.g. app, api)'
+    description: 'Package id from the infisicml registry (e.g. app, api)'
     required: true
   environment:
     description: 'Infisical environment slug (development, preview, production)'
@@ -22,11 +22,11 @@ inputs:
     description: 'Infisical machine-identity id bound to a GitHub OIDC auth method'
     required: true
   oidc-audience:
-    description: 'OIDC audience (must match the identity bound audiences). Overrides infiscml.config auth.oidcAudience.'
+    description: 'OIDC audience (must match the identity bound audiences). Overrides infisicml.config auth.oidcAudience.'
     required: false
     default: ''
-  infiscml-version:
-    description: 'Version of the infiscml npm package to run via npx'
+  infisicml-version:
+    description: 'Version of the infisicml npm package to run via npx'
     required: false
     default: 'latest'
 
@@ -45,4 +45,4 @@ runs:
         if [ -n "${{ inputs.profile }}" ]; then
           args+=(--profile "${{ inputs.profile }}")
         fi
-        npx --yes "@hubble-ventures/infiscml@${{ inputs.infiscml-version }}" "${args[@]}"
+        npx --yes "@hubble-ventures/infisicml@${{ inputs.infisicml-version }}" "${args[@]}"

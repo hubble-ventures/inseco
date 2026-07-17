@@ -1,21 +1,36 @@
 # Changelog
 
-All notable changes to `infiscml` are documented here. The format follows
+All notable changes to `infisicml` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.2.1] - 2026-07-17
+
+### Changed
+
+- **Renamed the package, CLI, repo, and config from `infiscml` to `infisicml`**
+  (a typo fix — the name is derived from *Infisical*). The npm package is now
+  `@hubble-ventures/infisicml`, the CLI binary is `infisicml`, the repository is
+  [`hubble-ventures/infisicml`](https://github.com/hubble-ventures/infisicml)
+  (GitHub redirects the old URL), and the exported config type is
+  `InfisicmlConfig`. The composite action input `infiscml-version` is now
+  `infisicml-version`.
+- **Config discovery is back-compatible.** `infisicml.config.{json,mjs,js}` is
+  preferred, but the old `infiscml.config.*` filenames still resolve, so
+  existing repos keep working without a rename.
 
 ## [1.2.0] - 2026-07-16
 
 ### Added
 
 - **Least-privilege fetch (`fetch: "keys"`).** A new per-manifest `fetch` field
-  (default `"folder"`) controls how secrets are read. In `"keys"` mode infiscml
+  (default `"folder"`) controls how secrets are read. In `"keys"` mode infisicml
   emits **only** the keys `include` resolves to. In **CI** this is enforced at
   the wire: each key is fetched with the single-secret REST endpoint
   (`GET /api/v3/secrets/raw/{name}`), so the vault never transmits the other
   keys in a folder — contrast folder mode, where `include` is a post-fetch
   filter and excluded values still travel over the wire. **Locally** the
-  `infisical` CLI has no single-secret server read, so infiscml fetches each
+  `infisical` CLI has no single-secret server read, so infisicml fetches each
   folder once and selects the keys (narrowing what's written, not what's
   transmitted). `include` names the final (post-alias) keys, so key mode
   **reverse-maps** each alias target to its canonical vault source before
@@ -47,15 +62,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [1.0.0] - 2026-07-16
 
 First public release. The `secrets.json` manifest contract and the
-`infiscml.config` surface are now considered stable under semver — breaking
+`infisicml.config` surface are now considered stable under semver — breaking
 changes to either ship only in a new major.
 
 ### Added
 
-- **Published to npm as a public scoped package** (`npm i -D @hubble-ventures/infiscml`,
-  `npx --yes @hubble-ventures/infiscml@latest`). Released via npm **trusted publishing**
+- **Published to npm as a public scoped package** (`npm i -D @hubble-ventures/infisicml`,
+  `npx --yes @hubble-ventures/infisicml@latest`). Released via npm **trusted publishing**
   (OIDC) with build provenance — no long-lived tokens.
-- **Stable action ref.** `hubble-ventures/infiscml/action@v1` is a floating major
+- **Stable action ref.** `hubble-ventures/infisicml/action@v1` is a floating major
   tag that tracks the latest `v1.x`; consumers may also pin a release SHA.
 - **CLI**: `pull`, `export-gha`, `list`, `validate`, `paths`, `run`.
 - **Two auth lanes, one per environment.** Local dev uses the Infisical CLI user
@@ -75,8 +90,9 @@ changes to either ship only in a new major.
   (`environments.<slug>.optionalKeys`) that downgrade a missing key to a
   `::notice::` instead of failing CI.
 - **Published JSON Schema** for `secrets.json`, served from
-  `https://cdn.jsdelivr.net/npm/@hubble-ventures/infiscml@1/schema/secrets.schema.json`.
+  `https://cdn.jsdelivr.net/npm/@hubble-ventures/infisicml@1/schema/secrets.schema.json`.
 
-[1.2.0]: https://github.com/hubble-ventures/infiscml/releases/tag/v1.2.0
-[1.1.0]: https://github.com/hubble-ventures/infiscml/releases/tag/v1.1.0
-[1.0.0]: https://github.com/hubble-ventures/infiscml/releases/tag/v1.0.0
+[1.2.1]: https://github.com/hubble-ventures/infisicml/releases/tag/v1.2.1
+[1.2.0]: https://github.com/hubble-ventures/infisicml/releases/tag/v1.2.0
+[1.1.0]: https://github.com/hubble-ventures/infisicml/releases/tag/v1.1.0
+[1.0.0]: https://github.com/hubble-ventures/infisicml/releases/tag/v1.0.0

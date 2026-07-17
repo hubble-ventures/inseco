@@ -7,17 +7,17 @@ import { runPull } from "./commands/pull.js";
 import { runExec } from "./commands/run.js";
 import { runValidate } from "./commands/validate.js";
 
-const USAGE = `infiscml — Infisical Secret Orchestration for monorepos
+const USAGE = `infisicml — Infisical Secret Orchestration for monorepos
 
 Usage:
-  infiscml pull [ids...] [--env ENV] [--profile NAME] [--force] [--here] [--turbo]
-  infiscml export-gha <id> [--env ENV] [--profile NAME]
-  infiscml list
-  infiscml validate
-  infiscml paths <id> [--profile NAME] [--comma]
-  infiscml run <id> [--profile NAME] [--env ENV] -- <command...>
+  infisicml pull [ids...] [--env ENV] [--profile NAME] [--force] [--here] [--turbo]
+  infisicml export-gha <id> [--env ENV] [--profile NAME]
+  infisicml list
+  infisicml validate
+  infisicml paths <id> [--profile NAME] [--comma]
+  infisicml run <id> [--profile NAME] [--env ENV] -- <command...>
 
-Config: infiscml.config.{ts,json} at the repo root. See https://github.com/hubble-ventures/infiscml
+Config: infisicml.config.{ts,json} at the repo root. See https://github.com/hubble-ventures/infisicml
 `;
 
 async function main(): Promise<void> {

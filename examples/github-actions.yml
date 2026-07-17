@@ -1,8 +1,8 @@
-# Example CI + deploy workflow using infiscml.
+# Example CI + deploy workflow using infisicml.
 #
 # Auth is GitHub OIDC ONLY — note `permissions: id-token: write`. There is no
 # client-id/secret fallback. The runner mints a short-lived OIDC token, the
-# infiscml action exchanges it for an Infisical access token, fetches the
+# infisicml action exchanges it for an Infisical access token, fetches the
 # package's secrets, and masks + appends them to GITHUB_ENV for later steps.
 
 name: deploy-api
@@ -23,7 +23,7 @@ jobs:
       # Loads secrets for the `api` package (its secrets.json) from the
       # Infisical `production` environment into GITHUB_ENV.
       - name: Load Infisical secrets
-        uses: hubble-ventures/infiscml/action@v1
+        uses: hubble-ventures/infisicml/action@v1
         with:
           package-id: api
           environment: production
