@@ -1,3 +1,33 @@
+import { resolveAliases } from "./aliases.js";
+import type { SecretsManifest } from "./manifest.js";
+
+/**
+ * Resolve the canonical vault keys to request in `fetch: "keys"` mode.
+ *
+ * `include` names the *final* (post-{@link applyAliases}) keys, but the vault is
+ * keyed by canonical names. For each `include` entry we request the name itself
+ * (it may be a real vault key) plus any alias *source* whose target is that name
+ * (so the source value exists to materialize the target). Phantom entries — an
+ * alias target that isn't a real vault key — simply miss on fetch, which is
+ * harmless: the post-fetch {@link selectEmittedSecrets} still validates the
+ * emitted set against `include`, so a genuinely-missing key fails there exactly
+ * as in folder mode.
+ */
+export function resolveFetchKeys(
+  include: string[],
+  manifest: SecretsManifest
+): string[] {
+  const aliases = resolveAliases(manifest);
+  const keys = new Set<string>();
+  for (const name of include) {
+    keys.add(name);
+    for (const { source, targets } of aliases) {
+      if (targets.includes(name)) keys.add(source);
+    }
+  }
+  return [...keys];
+}
+
 export type IncludeResult = {
   /** The emitted map after allowlist filtering. */
   filtered: Record<string, string>;

@@ -3,6 +3,7 @@ import { applyAliases } from "../src/aliases.js";
 import {
   applyInclude,
   enforceIncludeKnown,
+  resolveFetchKeys,
   selectEmittedSecrets,
 } from "../src/include.js";
 import { loadManifestJson, resolveInclude } from "../src/manifest.js";
@@ -83,6 +84,68 @@ describe("applyInclude + aliases ordering", () => {
     const aliased = applyAliases({ CLERK_PUBLISHABLE_KEY: "pk" }, m);
     const { filtered } = applyInclude(aliased, m.include);
     expect(filtered).toEqual({ VITE_CLERK_PUBLISHABLE_KEY: "pk" });
+  });
+});
+
+describe("resolveFetchKeys — canonical keys for fetch: keys mode", () => {
+  it("returns the include names verbatim when there are no aliases", () => {
+    const m = loadManifestJson({
+      paths: ["stripe"],
+      fetch: "keys",
+      include: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"],
+    });
+    expect(resolveFetchKeys(m.include!, m).sort()).toEqual([
+      "STRIPE_SECRET_KEY",
+      "STRIPE_WEBHOOK_SECRET",
+    ]);
+  });
+
+  it("reverse-maps an alias target to its canonical source", () => {
+    // include names the public alias target; the vault only holds the canonical
+    // GOOGLE_MAPS_API_KEY, so that's what must be requested.
+    const m = loadManifestJson({
+      paths: ["google"],
+      fetch: "keys",
+      aliases: { GOOGLE_MAPS_API_KEY: ["EXPO_PUBLIC_GOOGLE_MAPS_API_KEY"] },
+      include: ["EXPO_PUBLIC_GOOGLE_MAPS_API_KEY"],
+    });
+    expect(resolveFetchKeys(m.include!, m).sort()).toEqual([
+      "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY",
+      "GOOGLE_MAPS_API_KEY",
+    ]);
+  });
+
+  it("requests the source once even when several targets map from it", () => {
+    const m = loadManifestJson({
+      paths: ["google"],
+      fetch: "keys",
+      aliases: {
+        GOOGLE_MAPS_API_KEY: [
+          "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY",
+          "VITE_GOOGLE_MAPS_API_KEY",
+        ],
+      },
+      include: [
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY",
+        "VITE_GOOGLE_MAPS_API_KEY",
+      ],
+    });
+    const keys = resolveFetchKeys(m.include!, m);
+    expect(keys.filter((k) => k === "GOOGLE_MAPS_API_KEY")).toHaveLength(1);
+  });
+
+  it("keeps a plain include key that is unrelated to any alias", () => {
+    const m = loadManifestJson({
+      paths: ["clerk"],
+      fetch: "keys",
+      aliases: { CLERK_PUBLISHABLE_KEY: "VITE_CLERK_PUBLISHABLE_KEY" },
+      include: ["CLERK_SECRET_KEY", "VITE_CLERK_PUBLISHABLE_KEY"],
+    });
+    expect(resolveFetchKeys(m.include!, m).sort()).toEqual([
+      "CLERK_PUBLISHABLE_KEY",
+      "CLERK_SECRET_KEY",
+      "VITE_CLERK_PUBLISHABLE_KEY",
+    ]);
   });
 });
 

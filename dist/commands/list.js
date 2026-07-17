@@ -10,16 +10,23 @@ export async function runList(cwd) {
         if (m.include) {
             console.log(`    include: ${m.include.join(", ")}`);
         }
+        if (m.fetch) {
+            console.log(`    fetch: ${m.fetch}`);
+        }
         if (m.profiles) {
             for (const [name, profile] of Object.entries(m.profiles)) {
                 const profilePaths = profile.paths
                     .map((p) => normalizeFolderPath(p))
                     .join(", ");
                 console.log(`    [${name}]: ${profilePaths}`);
-                // A profile include replaces the root include; show whichever applies.
-                const effective = profile.include ?? m.include;
-                if (effective) {
-                    console.log(`      include: ${effective.join(", ")}`);
+                // A profile include/fetch replaces the root value; show whichever applies.
+                const effectiveInclude = profile.include ?? m.include;
+                if (effectiveInclude) {
+                    console.log(`      include: ${effectiveInclude.join(", ")}`);
+                }
+                const effectiveFetch = profile.fetch ?? m.fetch;
+                if (effectiveFetch) {
+                    console.log(`      fetch: ${effectiveFetch}`);
                 }
             }
         }

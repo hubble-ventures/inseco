@@ -53,6 +53,40 @@ export class RemoteProvider {
         }
         return merged;
     }
+    /**
+     * Fetch only the named keys from a folder via the single-secret raw endpoint
+     * (`GET /api/v3/secrets/raw/{name}`), so the vault transmits nothing beyond
+     * the requested keys — wire-level least privilege. `include_imports=false`
+     * keeps imported folders from widening the read. A 404 means the key isn't in
+     * this folder and is skipped; the caller merges across folders and enforces
+     * genuine absence. The access token is fetched once and reused across keys.
+     */
+    async exportKeys(envName, folder, keys) {
+        const token = await this.getAccessToken();
+        const envSlug = normalizeEnvSlug(envName);
+        const secretPath = normalizeFolderPath(folder);
+        const out = {};
+        for (const key of keys) {
+            const url = new URL(`${this.domain}/api/v3/secrets/raw/${encodeURIComponent(key)}`);
+            url.searchParams.set("secretPath", secretPath);
+            url.searchParams.set("environment", envSlug);
+            url.searchParams.set("workspaceSlug", this.projectSlug);
+            url.searchParams.set("include_imports", "false");
+            url.searchParams.set("expandSecretReferences", "true");
+            const resp = await this.fetchWithRetry(url.toString(), { headers: { Authorization: `Bearer ${token}` } }, 5, true // allow404: a missing key is a non-fatal miss, not an error
+            );
+            if (resp.status === 404)
+                continue;
+            const data = (await resp.json());
+            if (data.message) {
+                throw new Error(`Infisical error for key ${key}: ${data.message}`);
+            }
+            if (data.secret?.secretKey) {
+                out[data.secret.secretKey] = data.secret.secretValue ?? "";
+            }
+        }
+        return out;
+    }
     async getAccessToken() {
         if (this.token)
             return this.token;
@@ -93,7 +127,11 @@ export class RemoteProvider {
         }
         return data.value;
     }
-    async fetchWithRetry(url, init, maxAttempts = 5) {
+    async fetchWithRetry(url, init, maxAttempts = 5, 
+    // When set, a 404 short-circuits: it's returned as-is (not retried, not
+    // thrown) so a per-key read can treat "key not in this folder" as a normal,
+    // non-fatal miss rather than an error.
+    allow404 = false) {
         let lastError;
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
@@ -104,6 +142,8 @@ export class RemoteProvider {
                     signal: controller.signal,
                 });
                 clearTimeout(timeout);
+                if (allow404 && resp.status === 404)
+                    return resp;
                 if (!resp.ok) {
                     const text = await resp.text();
                     throw new Error(`HTTP ${resp.status}: ${text}`);

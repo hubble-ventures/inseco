@@ -4,6 +4,28 @@ All notable changes to `infiscml` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-07-16
+
+### Added
+
+- **Wire-level least-privilege fetch (`fetch: "keys"`).** A new per-manifest
+  `fetch` field (default `"folder"`) controls how secrets are read. In `"keys"`
+  mode infiscml requests **only** the keys `include` resolves to — locally via
+  `infisical secrets get <KEY> --path=…` per key, in CI via the single-secret
+  REST endpoint (`GET /api/v3/secrets/raw/{name}`, `include_imports=false`) — so
+  the vault never transmits the other keys in a folder. Contrast folder mode,
+  where `include` is a post-fetch filter and excluded values still travel over
+  the wire. `include` names the final (post-alias) keys, so key mode
+  **reverse-maps** each alias target to its canonical vault source before
+  fetching. Everything after the fetch (aliases, `include` filtering,
+  unknown-key enforcement, `optionalKeys`) is unchanged, so the emitted output
+  matches folder mode. `fetch: "keys"` **requires** an `include` allowlist
+  (enforced by `validate` and the pull / CI step). A per-profile `fetch`
+  replaces the root one (same replace-not-merge as `paths` / `include`). Honored
+  by `pull` and `export-gha`; surfaced by `list`, `paths`, and `validate`.
+  Published in the exported JSON Schema. Omitting `fetch` is byte-for-byte
+  backward compatible.
+
 ## [1.1.0] - 2026-07-16
 
 ### Added
@@ -52,5 +74,6 @@ changes to either ship only in a new major.
 - **Published JSON Schema** for `secrets.json`, served from
   `https://cdn.jsdelivr.net/npm/@hubble-ventures/infiscml@1/schema/secrets.schema.json`.
 
+[1.2.0]: https://github.com/hubble-ventures/infiscml/releases/tag/v1.2.0
 [1.1.0]: https://github.com/hubble-ventures/infiscml/releases/tag/v1.1.0
 [1.0.0]: https://github.com/hubble-ventures/infiscml/releases/tag/v1.0.0

@@ -1,4 +1,9 @@
-import type { SecretsManifest } from "./manifest.js";
+import { resolveFetchKeys } from "./include.js";
+import {
+  resolveFetchMode,
+  resolveInclude,
+  type SecretsManifest,
+} from "./manifest.js";
 import type { SecretsProvider } from "./providers/types.js";
 
 export type { SecretsProvider };
@@ -23,6 +28,61 @@ export async function fetchSecretsForPaths(
     chunks.push(await provider.exportFolder(envName, folder));
   }
   return mergeFolderSecrets(chunks);
+}
+
+/**
+ * `fetch: "keys"` counterpart to {@link fetchSecretsForPaths}: request only the
+ * given canonical keys from each folder and merge. A key absent from one folder
+ * is simply not returned by that folder; the merge (last folder wins, matching
+ * the folder path) collects it from whichever folder holds it.
+ */
+export async function fetchSecretsForKeys(
+  provider: SecretsProvider,
+  envName: string,
+  paths: string[],
+  keys: string[]
+): Promise<Record<string, string>> {
+  const chunks: Record<string, string>[] = [];
+  for (const folder of paths) {
+    chunks.push(await provider.exportKeys(envName, folder, keys));
+  }
+  return mergeFolderSecrets(chunks);
+}
+
+/**
+ * Fetch a manifest's secrets for the given folder set, honoring its resolved
+ * `fetch` mode: `keys` requests only the canonical keys `include` resolves to
+ * (least privilege at the wire), `folder` reads whole folders. `keys` requires
+ * an `include` allowlist — the whole point is to name exactly what to fetch.
+ *
+ * Callers pass an explicit `paths` subset (export-gha splits runtime vs
+ * deploy-only) rather than re-deriving it, so the runtime/deploy provenance the
+ * caller already computed is preserved.
+ */
+export async function fetchManifestSecrets(
+  provider: SecretsProvider,
+  envName: string,
+  paths: string[],
+  manifest: SecretsManifest,
+  profile?: string
+): Promise<Record<string, string>> {
+  if (resolveFetchMode(manifest, profile) === "keys") {
+    const include = resolveInclude(manifest, profile);
+    if (!include) {
+      throw new Error(
+        `fetch: "keys" requires an include allowlist${
+          profile ? ` (root or profile "${profile}")` : ""
+        } — it names exactly which keys to request from the vault.`
+      );
+    }
+    return fetchSecretsForKeys(
+      provider,
+      envName,
+      paths,
+      resolveFetchKeys(include, manifest)
+    );
+  }
+  return fetchSecretsForPaths(provider, envName, paths);
 }
 
 export function isCi(): boolean {

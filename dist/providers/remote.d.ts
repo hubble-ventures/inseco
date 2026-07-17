@@ -33,6 +33,15 @@ export declare class RemoteProvider implements SecretsProvider {
     private token?;
     constructor(options: RemoteProviderOptions);
     exportFolder(envName: string, folder: string): Promise<Record<string, string>>;
+    /**
+     * Fetch only the named keys from a folder via the single-secret raw endpoint
+     * (`GET /api/v3/secrets/raw/{name}`), so the vault transmits nothing beyond
+     * the requested keys — wire-level least privilege. `include_imports=false`
+     * keeps imported folders from widening the read. A 404 means the key isn't in
+     * this folder and is skipped; the caller merges across folders and enforces
+     * genuine absence. The access token is fetched once and reused across keys.
+     */
+    exportKeys(envName: string, folder: string, keys: string[]): Promise<Record<string, string>>;
     private getAccessToken;
     private fetchOidcJwtFromEnv;
     private fetchWithRetry;

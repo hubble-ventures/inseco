@@ -77,6 +77,48 @@ export class LocalProvider implements SecretsProvider {
       `infisical export failed for ${pathArg} after ${this.maxAttempts} attempts: ${lastMsg || "unknown error"}`
     );
   }
+
+  /**
+   * Fetch only the named keys from a folder via `infisical secrets get`. Probes
+   * one key at a time so that a key absent from this folder (the CLI exits
+   * non-zero) is isolated and skipped, rather than failing the whole batch —
+   * keys legitimately live across the manifest's several `paths`. A key found
+   * here is recorded; a non-zero exit means "not in this folder," so the caller
+   * merges results across folders and enforces genuine absence downstream.
+   */
+  async exportKeys(
+    envName: string,
+    folder: string,
+    keys: string[]
+  ): Promise<Record<string, string>> {
+    const pathArg = normalizeFolderPath(folder);
+    const out: Record<string, string> = {};
+
+    for (const key of keys) {
+      const result = this.spawnFn(
+        "infisical",
+        [
+          "secrets",
+          "get",
+          key,
+          `--env=${envName}`,
+          `--projectId=${this.projectId}`,
+          `--path=${pathArg}`,
+          "--plain",
+          "--silent",
+        ],
+        this.cwd
+      );
+      // exit 0 → present in this folder; --plain prints just the value.
+      // non-zero → not in this folder (skip). No retry: a real value succeeds
+      // on the first call, and retrying a genuine not-found only slows the pull.
+      if (result.status === 0) {
+        out[key] = (result.stdout ?? "").replace(/\n$/, "");
+      }
+    }
+
+    return out;
+  }
 }
 
 function sleepSeconds(seconds: number): Promise<void> {

@@ -2,7 +2,7 @@ import { existsSync, writeFileSync } from "node:fs";
 import { relative } from "node:path";
 import { applyAliases } from "./aliases.js";
 import {
-  fetchSecretsForPaths,
+  fetchManifestSecrets,
   keysForCiStub,
   shouldSkipInfisicalPull,
 } from "./ci-skip.js";
@@ -10,6 +10,7 @@ import { serializeDotenv } from "./dotenv.js";
 import { selectEmittedSecrets } from "./include.js";
 import {
   normalizeFolderPath,
+  resolveFetchMode,
   resolveInclude,
   resolvePaths,
   resolveSecretsOutputPath,
@@ -84,8 +85,9 @@ export async function pullManifest(
   }
 
   const paths = resolvePaths(manifest.config, profile);
+  const fetchMode = resolveFetchMode(manifest.config, profile);
   const aliased = applyAliases(
-    await fetchSecretsForPaths(provider, envName, paths),
+    await fetchManifestSecrets(provider, envName, paths, manifest.config, profile),
     manifest.config
   );
   // Default-deny key selection: emit only the allowlisted keys when `include`
@@ -107,6 +109,7 @@ export async function pullManifest(
     `# Environment: ${envName}`,
     profile ? `# Profile: ${profile}` : "",
     `# Paths: ${paths.map((p) => normalizeFolderPath(p)).join(", ")}`,
+    fetchMode === "keys" ? "# Fetch: keys (per-key least-privilege read)" : "",
     include ? `# Include: ${include.join(", ")}` : "",
     `# Generated: ${new Date().toISOString()}`,
   ]
