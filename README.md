@@ -213,21 +213,30 @@ don't use, set `fetch: "keys"`:
 }
 ```
 
-In `keys` mode infiscml requests **only** the keys `include` resolves to — locally via
-`infisical secrets get <KEY> --path=…` per key, in CI via the single-secret REST endpoint
-(`GET /api/v3/secrets/raw/{name}`, `include_imports=false`). The other keys in `/stripe` and
-`/google` are never sent by the vault.
+In `keys` mode infiscml emits **only** the keys `include` resolves to. Where the guarantee
+bites depends on the lane:
+
+- **CI (`export-gha`)** — true **wire-level** least privilege: each key is fetched with the
+  single-secret REST endpoint (`GET /api/v3/secrets/raw/{name}`), so the other keys in
+  `/stripe` and `/google` are **never sent by the vault**. This is the security-critical lane
+  (shared runners, `GITHUB_ENV`).
+- **Local (`pull`)** — the `infisical` CLI has no single-secret *server* read (`secrets get`
+  pulls the whole folder and filters client-side), so locally infiscml fetches each folder
+  once and selects the keys. It narrows what's **written to disk**, not what the vault
+  transmits — on your own machine, where folder mode already lands.
 
 - **Requires `include`** — key mode fetches exactly what `include` names, so an allowlist is
   mandatory (root or the active profile). `validate` and the pull/CI step both enforce this.
 - **Aliases are reverse-mapped** — `include` names the *final* (post-alias) keys, so infiscml
   fetches the canonical vault source behind each alias target. Above, listing
   `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` fetches the canonical `STRIPE_PUBLISHABLE_KEY`.
+- **Imports still resolve** — a key surfaced into a `paths` folder via an Infisical import is
+  fetched in `keys` mode too (the per-key read follows imports but returns only that one
+  secret), so enabling `keys` never silently drops an import-backed key.
 - **Same emit result** — everything after the fetch (aliases, `include` filtering, unknown-key
   enforcement, `optionalKeys`) is identical to folder mode; only what's read narrows.
-- **Cost** — one request **per key** (times folders probed) instead of one per folder. For a
-  short `include` this is negligible; the `paths` list becomes advisory (`infiscml paths` notes
-  this).
+- **Cost** — in CI, one request **per key** instead of one per folder; the `paths` list becomes
+  advisory (`infiscml paths` notes this).
 - **Profiles** — a profile may set its own `fetch`, which **replaces** the root value (like
   `paths` / `include`). A deploy profile can stay in `folder` mode while the runtime default
   is `keys`, or vice versa.

@@ -27,9 +27,7 @@ export async function runPaths(options: PathsOptions): Promise<void> {
 
   // `paths` feeds the infisical CLI, which fetches whole folders — key-level
   // `include` filtering happens later, in pull/export-gha. Warn on stderr so the
-  // filtering isn't invisible to someone reading only this folder list. In
-  // `fetch: "keys"` mode the folder list is advisory only: pull/export-gha read
-  // per key, not per folder.
+  // filtering isn't invisible to someone reading only this folder list.
   const include = resolveInclude(manifest.config, options.profile);
   if (include) {
     console.error(
@@ -38,7 +36,7 @@ export async function runPaths(options: PathsOptions): Promise<void> {
   }
   if (resolveFetchMode(manifest.config, options.profile) === "keys") {
     console.error(
-      `# note: ${options.packageId} uses fetch: "keys" — these folders are advisory; infiscml reads only the listed keys per key, not whole folders.`
+      `# note: ${options.packageId} uses fetch: "keys" — only the include keys are emitted; in CI they are read per-key from the vault (wire-level least privilege).`
     );
   }
 

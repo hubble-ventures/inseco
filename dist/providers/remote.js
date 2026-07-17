@@ -56,10 +56,13 @@ export class RemoteProvider {
     /**
      * Fetch only the named keys from a folder via the single-secret raw endpoint
      * (`GET /api/v3/secrets/raw/{name}`), so the vault transmits nothing beyond
-     * the requested keys — wire-level least privilege. `include_imports=false`
-     * keeps imported folders from widening the read. A 404 means the key isn't in
-     * this folder and is skipped; the caller merges across folders and enforces
-     * genuine absence. The access token is fetched once and reused across keys.
+     * the requested keys — wire-level least privilege. `include_imports=true`
+     * matches {@link exportFolder}, so a key surfaced into this folder via an
+     * Infisical import is still resolved (the single-name endpoint returns only
+     * that one secret, so following imports doesn't widen the read). A 404 means
+     * the key isn't reachable from this folder and is skipped; the caller merges
+     * across folders and enforces genuine absence. The access token is fetched
+     * once and reused across keys.
      */
     async exportKeys(envName, folder, keys) {
         const token = await this.getAccessToken();
@@ -71,7 +74,7 @@ export class RemoteProvider {
             url.searchParams.set("secretPath", secretPath);
             url.searchParams.set("environment", envSlug);
             url.searchParams.set("workspaceSlug", this.projectSlug);
-            url.searchParams.set("include_imports", "false");
+            url.searchParams.set("include_imports", "true");
             url.searchParams.set("expandSecretReferences", "true");
             const resp = await this.fetchWithRetry(url.toString(), { headers: { Authorization: `Bearer ${token}` } }, 5, true // allow404: a missing key is a non-fatal miss, not an error
             );

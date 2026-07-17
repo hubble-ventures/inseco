@@ -97,7 +97,9 @@ describe("RemoteProvider.exportKeys — per-key least-privilege read", () => {
     // Never requested a whole-folder read, only per-key raw endpoints.
     expect(calls.some((u) => u.includes("/secrets/raw/STRIPE_PUBLISHABLE_KEY")))
       .toBe(true);
-    expect(calls.some((u) => u.includes("include_imports=false"))).toBe(true);
+    // Imports are followed (matching folder mode) so an import-surfaced key is
+    // still resolved; the single-name endpoint returns only that one secret.
+    expect(calls.some((u) => u.includes("include_imports=true"))).toBe(true);
     expect(
       calls.some((u) => u.includes("secrets/raw?") /* folder list form */)
     ).toBe(false);

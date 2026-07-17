@@ -12,15 +12,13 @@ export async function runPaths(options) {
     const normalized = paths.map((p) => normalizeFolderPath(p));
     // `paths` feeds the infisical CLI, which fetches whole folders — key-level
     // `include` filtering happens later, in pull/export-gha. Warn on stderr so the
-    // filtering isn't invisible to someone reading only this folder list. In
-    // `fetch: "keys"` mode the folder list is advisory only: pull/export-gha read
-    // per key, not per folder.
+    // filtering isn't invisible to someone reading only this folder list.
     const include = resolveInclude(manifest.config, options.profile);
     if (include) {
         console.error(`# note: ${options.packageId} filters emitted keys to: ${include.join(", ")}`);
     }
     if (resolveFetchMode(manifest.config, options.profile) === "keys") {
-        console.error(`# note: ${options.packageId} uses fetch: "keys" — these folders are advisory; infiscml reads only the listed keys per key, not whole folders.`);
+        console.error(`# note: ${options.packageId} uses fetch: "keys" — only the include keys are emitted; in CI they are read per-key from the vault (wire-level least privilege).`);
     }
     if (options.comma) {
         console.log(normalized.map((p) => p.replace(/^\//, "")).join(","));

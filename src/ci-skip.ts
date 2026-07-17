@@ -69,10 +69,15 @@ export async function fetchManifestSecrets(
   if (resolveFetchMode(manifest, profile) === "keys") {
     const include = resolveInclude(manifest, profile);
     if (!include) {
+      // resolveInclude already checked the profile then the root, so name the
+      // exact place(s) that need an `include` rather than a vague "root or
+      // profile" — the user should add it to whichever they're running.
+      const where = profile
+        ? `neither profile "${profile}" nor the manifest root defines one`
+        : "the manifest root does not define one";
       throw new Error(
-        `fetch: "keys" requires an include allowlist${
-          profile ? ` (root or profile "${profile}")` : ""
-        } — it names exactly which keys to request from the vault.`
+        `fetch: "keys" requires an include allowlist, but ${where}. ` +
+          "Add `include: [...]` naming exactly which keys to request from the vault."
       );
     }
     return fetchSecretsForKeys(

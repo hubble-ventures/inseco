@@ -8,16 +8,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **Wire-level least-privilege fetch (`fetch: "keys"`).** A new per-manifest
-  `fetch` field (default `"folder"`) controls how secrets are read. In `"keys"`
-  mode infiscml requests **only** the keys `include` resolves to — locally via
-  `infisical secrets get <KEY> --path=…` per key, in CI via the single-secret
-  REST endpoint (`GET /api/v3/secrets/raw/{name}`, `include_imports=false`) — so
-  the vault never transmits the other keys in a folder. Contrast folder mode,
-  where `include` is a post-fetch filter and excluded values still travel over
-  the wire. `include` names the final (post-alias) keys, so key mode
+- **Least-privilege fetch (`fetch: "keys"`).** A new per-manifest `fetch` field
+  (default `"folder"`) controls how secrets are read. In `"keys"` mode infiscml
+  emits **only** the keys `include` resolves to. In **CI** this is enforced at
+  the wire: each key is fetched with the single-secret REST endpoint
+  (`GET /api/v3/secrets/raw/{name}`), so the vault never transmits the other
+  keys in a folder — contrast folder mode, where `include` is a post-fetch
+  filter and excluded values still travel over the wire. **Locally** the
+  `infisical` CLI has no single-secret server read, so infiscml fetches each
+  folder once and selects the keys (narrowing what's written, not what's
+  transmitted). `include` names the final (post-alias) keys, so key mode
   **reverse-maps** each alias target to its canonical vault source before
-  fetching. Everything after the fetch (aliases, `include` filtering,
+  fetching, and import-surfaced keys still resolve. Everything after the fetch
+  (aliases, `include` filtering,
   unknown-key enforcement, `optionalKeys`) is unchanged, so the emitted output
   matches folder mode. `fetch: "keys"` **requires** an `include` allowlist
   (enforced by `validate` and the pull / CI step). A per-profile `fetch`
