@@ -274,4 +274,60 @@ describe("pullManifest — output paths + multi-target aliases", () => {
       ).rejects.toThrow(/NONEXISTENT_KEY/);
     });
   });
+
+  describe("cross-folder provenance (same key name in two folders)", () => {
+    /** Provider that returns a distinct secret set per folder path. */
+    function folderAwareProvider(
+      byFolder: Record<string, Record<string, string>>
+    ): SecretsProvider {
+      return {
+        async exportFolder(_env, folder) {
+          return { ...(byFolder[folder] ?? {}) };
+        },
+        async exportKeys(_env, folder, keys) {
+          const src = byFolder[folder] ?? {};
+          const out: Record<string, string> = {};
+          for (const k of keys) if (k in src) out[k] = src[k];
+          return out;
+        },
+      };
+    }
+
+    it("routes each folder's TOKEN value to its OWN alias target", async () => {
+      await pullManifest({
+        manifest: manifest({
+          tree: {
+            a: { aliased: { TOKEN: "A_TOKEN" } },
+            b: { aliased: { TOKEN: "B_TOKEN" } },
+          },
+          output: ".env",
+        }),
+        repoRoot: dir,
+        envName: "development",
+        provider: folderAwareProvider({
+          a: { TOKEN: "a-value" },
+          b: { TOKEN: "b-value" },
+        }),
+      });
+
+      const parsed = parseDotenv(readFileSync(join(dir, ".env"), "utf8"));
+      // Each alias target carries its own folder's value (not one shared TOKEN).
+      expect(parsed.A_TOKEN).toBe("a-value");
+      expect(parsed.B_TOKEN).toBe("b-value");
+    });
+
+    it("fails when a key is missing from ONE declaring folder even if another has it", async () => {
+      await expect(
+        pullManifest({
+          manifest: manifest({
+            tree: { a: { raw: ["TOKEN"] }, b: { raw: ["TOKEN"] } },
+            output: ".env",
+          }),
+          repoRoot: dir,
+          envName: "development",
+          provider: folderAwareProvider({ a: {}, b: { TOKEN: "b-value" } }),
+        })
+      ).rejects.toThrow(/TOKEN/);
+    });
+  });
 });

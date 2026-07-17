@@ -1,9 +1,7 @@
 import { existsSync, writeFileSync } from "node:fs";
 import { relative } from "node:path";
-import { applyAliases } from "./aliases.js";
-import { fetchCompiledSecrets, keysForCiStub, shouldSkipInfisicalPull, } from "./ci-skip.js";
+import { fetchCompiledFolders, keysForCiStub, materializeSecrets, shouldSkipInfisicalPull, } from "./ci-skip.js";
 import { serializeDotenv } from "./dotenv.js";
-import { selectEmittedSecrets } from "./include.js";
 import { normalizeFolderPath, resolveCompiledFolders, resolveFetchMode, resolveSecretsOutputPath, } from "./manifest.js";
 import { resolveOptionalKeys } from "./optional-keys.js";
 export function writeInjectedSecretsStub(outputPath, manifest, keys) {
@@ -39,13 +37,10 @@ export async function pullManifest(options) {
     }
     const folders = resolveCompiledFolders(manifest.config, profile);
     const fetchMode = resolveFetchMode(manifest.config, profile);
-    const aliased = applyAliases(await fetchCompiledSecrets(provider, envName, folders, fetchMode), folders);
-    // The fetch already selected exactly the declared keys per folder; this only
-    // enforces that every declared canonical key was produced (unless optional).
-    const declaredKeys = [
-        ...new Set(folders.flatMap((f) => f.keys.map((k) => k.key))),
-    ];
-    const merged = selectEmittedSecrets(aliased, declaredKeys, resolveOptionalKeys(manifest.config, envName));
+    // Per-folder fetch → per-folder alias + missing-key enforcement → merge, so a
+    // key declared in two folders keeps each folder's value/provenance.
+    const folderSecrets = await fetchCompiledFolders(provider, envName, folders, fetchMode);
+    const merged = materializeSecrets(folderSecrets, resolveOptionalKeys(manifest.config, envName));
     // filter(Boolean) drops the optional Profile line when absent. It would also
     // drop a trailing "" sentinel, so append the trailing newline explicitly —
     // otherwise the first secret gets glued onto the "# Generated" line.

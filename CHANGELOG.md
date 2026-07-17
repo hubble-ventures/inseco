@@ -46,11 +46,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `--profile` is set) plus an optional `fetch`; `profiles.<name>.paths` /
   `.include` are gone.
 - **Programmatic API.** `resolvePaths` / `resolveInclude` / `applyInclude` /
-  `resolveFetchKeys` / `checkFetchIncludeConsistency` / `fetchManifestSecrets`
-  are replaced by `resolveCompiledFolders`, `compileTree`, and
-  `fetchCompiledSecrets`; `enforceIncludeKnown` is renamed `enforceKnownKeys`.
-  New exports: `compileTree`, `treeSchema`, and the `CompiledFolder` /
-  `CompiledKey` / `FolderNode` / `SecretsTree` / `AliasSpec` types.
+  `resolveFetchKeys` / `checkFetchIncludeConsistency` / `fetchManifestSecrets` /
+  `selectEmittedSecrets` are replaced by `resolveCompiledFolders`, `compileTree`,
+  `fetchCompiledFolders`, and `materializeSecrets` (the latter applies aliases
+  and enforces missing keys **per folder**, before merging, so a key name shared
+  across folders keeps each folder's value and miss); `enforceIncludeKnown` is
+  renamed `enforceKnownKeys`. New exports: `compileTree`, `treeSchema`,
+  `materializeSecrets`, and the `CompiledFolder` / `CompiledKey` / `FolderNode` /
+  `SecretsTree` / `AliasSpec` / `FolderSecrets` types.
 - **Schema** rewritten around `tree` and published at `@2`.
 
 ### Migration

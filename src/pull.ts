@@ -1,13 +1,12 @@
 import { existsSync, writeFileSync } from "node:fs";
 import { relative } from "node:path";
-import { applyAliases } from "./aliases.js";
 import {
-  fetchCompiledSecrets,
+  fetchCompiledFolders,
   keysForCiStub,
+  materializeSecrets,
   shouldSkipInfisicalPull,
 } from "./ci-skip.js";
 import { serializeDotenv } from "./dotenv.js";
-import { selectEmittedSecrets } from "./include.js";
 import {
   normalizeFolderPath,
   resolveCompiledFolders,
@@ -85,18 +84,16 @@ export async function pullManifest(
 
   const folders = resolveCompiledFolders(manifest.config, profile);
   const fetchMode = resolveFetchMode(manifest.config, profile);
-  const aliased = applyAliases(
-    await fetchCompiledSecrets(provider, envName, folders, fetchMode),
-    folders
+  // Per-folder fetch → per-folder alias + missing-key enforcement → merge, so a
+  // key declared in two folders keeps each folder's value/provenance.
+  const folderSecrets = await fetchCompiledFolders(
+    provider,
+    envName,
+    folders,
+    fetchMode
   );
-  // The fetch already selected exactly the declared keys per folder; this only
-  // enforces that every declared canonical key was produced (unless optional).
-  const declaredKeys = [
-    ...new Set(folders.flatMap((f) => f.keys.map((k) => k.key))),
-  ];
-  const merged = selectEmittedSecrets(
-    aliased,
-    declaredKeys,
+  const merged = materializeSecrets(
+    folderSecrets,
     resolveOptionalKeys(manifest.config, envName)
   );
 

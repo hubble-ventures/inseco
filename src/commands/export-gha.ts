@@ -1,10 +1,8 @@
-import { applyAliases } from "../aliases.js";
-import { fetchCompiledSecrets } from "../ci-skip.js";
+import { fetchCompiledFolders, materializeSecrets } from "../ci-skip.js";
 import { loadConfig } from "../config.js";
 import { normalizeEnvSlug } from "../env-slug.js";
 import { appendSecretsToGithubEnv } from "../github-env.js";
 import { runAdvertiseKeysHooks } from "../hooks.js";
-import { selectEmittedSecrets } from "../include.js";
 import {
   normalizeFolderPath,
   resolveCompiledFolders,
@@ -13,6 +11,7 @@ import {
 import { resolveOptionalKeys } from "../optional-keys.js";
 import { RemoteProvider } from "../providers/remote.js";
 import { discoverManifests } from "../registry.js";
+import type { CompiledFolder } from "../tree.js";
 
 export type ExportGhaOptions = {
   packageId: string;
@@ -23,6 +22,40 @@ export type ExportGhaOptions = {
   projectSlug?: string;
   identityId?: string;
 };
+
+/**
+ * Canonical (pre-alias) key names to advertise, split runtime vs all.
+ *
+ * Classification is by **(path, key)** against the base tree, not by folder path
+ * alone: a profile can reuse a base folder path and add deploy-only keys, so a
+ * key counts as runtime only if the base tree declares *that key* under *that
+ * path*. This keeps a deploy-only credential in a shared folder out of the
+ * runtime-scoped advertise set (and thus out of runtime deploy forwarding).
+ * Only keys actually in `emitted` are advertised, so an absent optional key is
+ * never named.
+ */
+export function computeAdvertiseKeys(
+  allFolders: CompiledFolder[],
+  baseFolders: CompiledFolder[],
+  emitted: Record<string, string>
+): { runtimeKeys: string[]; allKeys: string[] } {
+  const baseKeysByPath = new Map<string, Set<string>>();
+  for (const f of baseFolders) {
+    baseKeysByPath.set(f.path, new Set(f.keys.map((k) => k.key)));
+  }
+  const runtimeKeys = new Set<string>();
+  const allKeys = new Set<string>();
+  for (const folder of allFolders) {
+    for (const key of folder.keys) {
+      if (emitted[key.key] === undefined) continue;
+      allKeys.add(key.key);
+      if (baseKeysByPath.get(folder.path)?.has(key.key)) {
+        runtimeKeys.add(key.key);
+      }
+    }
+  }
+  return { runtimeKeys: [...runtimeKeys], allKeys: [...allKeys] };
+}
 
 export async function runExportGha(options: ExportGhaOptions): Promise<void> {
   const config = await loadConfig(options.cwd);
@@ -47,15 +80,9 @@ export async function runExportGha(options: ExportGhaOptions): Promise<void> {
 
   // The base tree holds the app's runtime secrets; a profile (e.g. `deploy`)
   // may replace it with a superset that also carries deploy-time credentials.
-  // Split by folder path so we advertise only runtime keys for deploy
-  // forwarding.
   const allFolders = resolveCompiledFolders(manifest.config, options.profile);
+  const baseFolders = resolveCompiledFolders(manifest.config);
   const fetchMode = resolveFetchMode(manifest.config, options.profile);
-  const basePaths = new Set(
-    resolveCompiledFolders(manifest.config).map((f) => f.path)
-  );
-  const runtimeFolders = allFolders.filter((f) => basePaths.has(f.path));
-  const deployOnlyFolders = allFolders.filter((f) => !basePaths.has(f.path));
 
   const identityId = options.identityId ?? process.env.INFISICAL_IDENTITY_ID;
   if (!identityId) {
@@ -78,42 +105,27 @@ export async function runExportGha(options: ExportGhaOptions): Promise<void> {
     );
   }
 
-  // Two calls (runtime then deploy-only), reusing the cached access token, so we
-  // know which keys are runtime. Each call selects its folders' declared keys
-  // from those folders (provenance-aware), so the split survives the merge.
-  const runtimeSecrets = await fetchCompiledSecrets(
+  // One per-folder fetch (token cached across folders). Per-folder alias
+  // expansion + missing-key enforcement (before the merge) keeps provenance, so
+  // a key declared in two folders can't have one folder's miss masked by the
+  // other, nor one folder's value routed to the other's alias.
+  const folderSecrets = await fetchCompiledFolders(
     provider,
     envName,
-    runtimeFolders,
+    allFolders,
     fetchMode
   );
-  const deployOnlySecrets = deployOnlyFolders.length
-    ? await fetchCompiledSecrets(provider, envName, deployOnlyFolders, fetchMode)
-    : {};
-
   const optionalKeys = resolveOptionalKeys(manifest.config, envName);
-  const aliased = applyAliases(
-    { ...runtimeSecrets, ...deployOnlySecrets },
-    allFolders
-  );
-  // The fetch already selected the declared keys per folder; this only enforces
-  // that every declared canonical key was produced. A declared-but-absent
-  // optional key gets a single ::notice:: from enforceKnownKeys.
-  const declaredKeys = [
-    ...new Set(allFolders.flatMap((f) => f.keys.map((k) => k.key))),
-  ];
-  const merged = selectEmittedSecrets(aliased, declaredKeys, optionalKeys);
+  const merged = materializeSecrets(folderSecrets, optionalKeys);
   appendSecretsToGithubEnv(githubEnvPath, merged);
 
   // Advertise CANONICAL (pre-alias) key names. Alias targets (e.g.
   // NEXT_PUBLIC_*) are build-tool copies, not the names a server runtime reads,
   // so they are intentionally not advertised — they still land in the job env
-  // via `merged` for build steps that need them. Filter to keys actually in
-  // `merged` so we never advertise a name not in the job env (e.g. an absent
-  // optional key).
-  const emitted = (keys: string[]) => keys.filter((k) => merged[k] !== undefined);
-  runAdvertiseKeysHooks(githubEnvPath, config.hooks?.advertiseKeys, {
-    runtimeKeys: emitted(Object.keys(runtimeSecrets)),
-    allKeys: emitted(Object.keys({ ...runtimeSecrets, ...deployOnlySecrets })),
-  });
+  // via `merged` for build steps that need them.
+  runAdvertiseKeysHooks(
+    githubEnvPath,
+    config.hooks?.advertiseKeys,
+    computeAdvertiseKeys(allFolders, baseFolders, merged)
+  );
 }

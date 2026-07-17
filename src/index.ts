@@ -4,9 +4,11 @@ export {
   resolveAliases,
 } from "./aliases.js";
 export {
-  fetchCompiledSecrets,
+  fetchCompiledFolders,
+  type FolderSecrets,
   isCi,
   keysForCiStub,
+  materializeSecrets,
   mergeFolderSecrets,
   shouldSkipInfisicalPull,
 } from "./ci-skip.js";
@@ -30,7 +32,7 @@ export {
   keysForScope,
   runAdvertiseKeysHooks,
 } from "./hooks.js";
-export { enforceKnownKeys, selectEmittedSecrets } from "./include.js";
+export { enforceKnownKeys } from "./include.js";
 export {
   loadManifestJson,
   normalizeFolderPath,

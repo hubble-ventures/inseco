@@ -8,7 +8,9 @@
 export function enforceKnownKeys(unknown, optionalKeys) {
     const optional = new Set(optionalKeys);
     const missing = [];
-    for (const name of unknown) {
+    // Dedupe: the same key name can be declared-and-absent in more than one
+    // folder, which would otherwise notice/report it twice.
+    for (const name of new Set(unknown)) {
         if (optional.has(name)) {
             console.log(`::notice::declared key ${name} not produced by its folder (optional for this environment)`);
         }
@@ -20,19 +22,5 @@ export function enforceKnownKeys(unknown, optionalKeys) {
         throw new Error(`tree declares key(s) not produced by any pulled folder: ${missing.join(", ")}. ` +
             "Fix the name, add the folder, or list the key in environments.<slug>.optionalKeys to allow absence.");
     }
-}
-/**
- * Final emit step for both surfaces (CI `export-gha`, local `pull`): the fetch
- * already selected exactly the declared keys per folder, so nothing is filtered
- * here — the aliased map (declared keys + their alias targets) is emitted whole.
- * This step only enforces that every declared canonical key was actually
- * produced; a declared key absent from its folder is missing from `aliased`
- * (its alias target too, since {@link applyAliases} skips an absent source), so
- * it surfaces as an unknown and fails unless it's optional for this environment.
- */
-export function selectEmittedSecrets(aliased, declaredKeys, optionalKeys) {
-    const unknown = declaredKeys.filter((key) => !(key in aliased));
-    enforceKnownKeys(unknown, optionalKeys);
-    return { ...aliased };
 }
 //# sourceMappingURL=include.js.map
