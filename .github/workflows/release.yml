@@ -56,25 +56,31 @@ jobs:
         with:
           fetch-depth: 0
       - id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           PKG="$(node -p "require('./package.json').version")"
+          TAG="v$PKG"
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            TAG="${GITHUB_REF_NAME}"
-            if [ "$TAG" != "v$PKG" ]; then
-              echo "::error::tag $TAG does not match package.json version $PKG"
+            if [ "${GITHUB_REF_NAME}" != "$TAG" ]; then
+              echo "::error::tag ${GITHUB_REF_NAME} does not match package.json version $PKG"
               exit 1
             fi
             echo "release=true" >> "$GITHUB_OUTPUT"
+          # Main push: gate on whether the release actually COMPLETED, not on the
+          # tag. The release job creates the tag before publishing, so a tag can
+          # exist for a half-finished release — gating on it would strand a
+          # partial release with no rerun path. Every release step is idempotent,
+          # so re-run unless BOTH npm has the version AND its GitHub Release
+          # exists (a rerun then finishes publish / release / major-tag repair).
+          elif npm view "@hubble-ventures/infisicml@$PKG" version >/dev/null 2>&1 \
+               && gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::notice::$TAG already published — nothing to release"
+            echo "release=false" >> "$GITHUB_OUTPUT"
           else
-            TAG="v$PKG"
-            if git ls-remote --tags --exit-code origin "refs/tags/$TAG" >/dev/null 2>&1; then
-              echo "::notice::$TAG already tagged — nothing to release"
-              echo "release=false" >> "$GITHUB_OUTPUT"
-            else
-              echo "::notice::version bumped to $PKG — releasing $TAG"
-              echo "release=true" >> "$GITHUB_OUTPUT"
-            fi
+            echo "::notice::releasing $TAG"
+            echo "release=true" >> "$GITHUB_OUTPUT"
           fi
           echo "version=$PKG" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
