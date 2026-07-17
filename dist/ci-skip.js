@@ -1,5 +1,5 @@
-import { resolveFetchKeys } from "./include.js";
-import { resolveFetchMode, resolveInclude, } from "./manifest.js";
+import { applyAliases } from "./aliases.js";
+import { enforceKnownKeys } from "./include.js";
 export function mergeFolderSecrets(chunks) {
     const merged = {};
     for (const chunk of chunks) {
@@ -7,52 +7,61 @@ export function mergeFolderSecrets(chunks) {
     }
     return merged;
 }
-export async function fetchSecretsForPaths(provider, envName, paths) {
-    const chunks = [];
-    for (const folder of paths) {
-        chunks.push(await provider.exportFolder(envName, folder));
-    }
-    return mergeFolderSecrets(chunks);
-}
 /**
- * `fetch: "keys"` counterpart to {@link fetchSecretsForPaths}: request only the
- * given canonical keys from each folder and merge. A key absent from one folder
- * is simply not returned by that folder; the merge (last folder wins, matching
- * the folder path) collects it from whichever folder holds it.
- */
-export async function fetchSecretsForKeys(provider, envName, paths, keys) {
-    const chunks = [];
-    for (const folder of paths) {
-        chunks.push(await provider.exportKeys(envName, folder, keys));
-    }
-    return mergeFolderSecrets(chunks);
-}
-/**
- * Fetch a manifest's secrets for the given folder set, honoring its resolved
- * `fetch` mode: `keys` requests only the canonical keys `include` resolves to
- * (least privilege at the wire), `folder` reads whole folders. `keys` requires
- * an `include` allowlist — the whole point is to name exactly what to fetch.
+ * Fetch each compiled folder and select *that folder's* declared keys from it,
+ * honoring the resolved `fetch` mode. `keys` mode requests only the declared
+ * keys per folder (the tree names the exact canonical vault keys, so no
+ * allowlist reverse-map is needed — the alias *source* is the real key);
+ * `folder` mode reads the whole folder and picks the declared keys locally.
  *
- * Callers pass an explicit `paths` subset (export-gha splits runtime vs
- * deploy-only) rather than re-deriving it, so the runtime/deploy provenance the
- * caller already computed is preserved.
+ * Returns one {@link FolderSecrets} per folder so downstream steps keep folder
+ * provenance: two folders declaring the same key name are distinct entries here,
+ * and only collapse (last-wins) at the final merge — see {@link materializeSecrets}.
  */
-export async function fetchManifestSecrets(provider, envName, paths, manifest, profile) {
-    if (resolveFetchMode(manifest, profile) === "keys") {
-        const include = resolveInclude(manifest, profile);
-        if (!include) {
-            // resolveInclude already checked the profile then the root, so name the
-            // exact place(s) that need an `include` rather than a vague "root or
-            // profile" — the user should add it to whichever they're running.
-            const where = profile
-                ? `neither profile "${profile}" nor the manifest root defines one`
-                : "the manifest root does not define one";
-            throw new Error(`fetch: "keys" requires an include allowlist, but ${where}. ` +
-                "Add `include: [...]` naming exactly which keys to request from the vault.");
+export async function fetchCompiledFolders(provider, envName, folders, fetchMode) {
+    const out = [];
+    for (const folder of folders) {
+        const declared = folder.keys.map((k) => k.key);
+        const raw = fetchMode === "keys"
+            ? await provider.exportKeys(envName, folder.path, declared)
+            : await provider.exportFolder(envName, folder.path);
+        const selected = {};
+        for (const key of declared) {
+            if (key in raw)
+                selected[key] = raw[key];
         }
-        return fetchSecretsForKeys(provider, envName, paths, resolveFetchKeys(include, manifest));
+        out.push({ folder, selected });
     }
-    return fetchSecretsForPaths(provider, envName, paths);
+    return out;
+}
+/**
+ * Turn per-folder fetched secrets into the final emit map, preserving folder
+ * provenance:
+ *
+ * - **Missing keys are checked per folder/key pair, before merging.** A key
+ *   declared in `/a` but absent from `/a` is unknown even if a same-named key in
+ *   `/b` was produced — so a genuine miss can't be masked by another folder.
+ * - **Aliases expand from the folder-local value.** `/a`'s `TOKEN -> A_TOKEN`
+ *   uses `/a`'s `TOKEN`, and `/b`'s `TOKEN -> B_TOKEN` uses `/b`'s — the flat
+ *   merge (which keeps only one `TOKEN`) can no longer route one folder's secret
+ *   to another folder's alias.
+ *
+ * Folder-local aliased maps then merge in tree order (last-wins on a genuine
+ * cross-folder name collision). A declared key absent from its folder fails
+ * unless its name is in `optionalKeys` for the environment.
+ */
+export function materializeSecrets(folderSecrets, optionalKeys) {
+    const unknown = [];
+    const chunks = [];
+    for (const { folder, selected } of folderSecrets) {
+        for (const key of folder.keys) {
+            if (!(key.key in selected))
+                unknown.push(key.key);
+        }
+        chunks.push(applyAliases(selected, [folder]));
+    }
+    enforceKnownKeys(unknown, optionalKeys);
+    return mergeFolderSecrets(chunks);
 }
 export function isCi() {
     const ci = process.env.CI;

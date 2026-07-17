@@ -33,11 +33,11 @@ jobs:
           oidc-audience: ${{ vars.INFISICAL_OIDC_AUDIENCE }} # optional
 
       # Runtime secrets are now in the job env. The advertiseKeys hook also wrote
-      # INFISCML_FLY_KEYS=<comma-separated runtime key names> — forward exactly
+      # INFISICML_FLY_KEYS=<comma-separated runtime key names> — forward exactly
       # those to the app, so secrets.json stays the source of truth.
       - name: Deploy to Fly
         run: |
-          IFS=',' read -ra KEYS <<< "$INFISCML_FLY_KEYS"
+          IFS=',' read -ra KEYS <<< "$INFISICML_FLY_KEYS"
           for k in "${KEYS[@]}"; do
             printf '%s=%s\n' "$k" "${!k}"
           done | flyctl secrets import --app my-api

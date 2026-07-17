@@ -42,11 +42,11 @@ describe("hooks — advertise keys", () => {
     const envFile = join(tempDir, "GITHUB_ENV");
     runAdvertiseKeysHooks(
       envFile,
-      [{ envVar: "INFISCML_FLY_KEYS", scope: "runtime" }],
+      [{ envVar: "INFISICML_FLY_KEYS", scope: "runtime" }],
       input
     );
     expect(readFileSync(envFile, "utf8")).toBe(
-      "INFISCML_FLY_KEYS=CLERK_PUBLISHABLE_KEY,CLERK_SECRET_KEY\n"
+      "INFISICML_FLY_KEYS=CLERK_PUBLISHABLE_KEY,CLERK_SECRET_KEY\n"
     );
   });
 

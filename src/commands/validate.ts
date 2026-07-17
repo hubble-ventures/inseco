@@ -1,8 +1,5 @@
 import { loadConfig } from "../config.js";
-import {
-  checkFetchIncludeConsistency,
-  secretsManifestSchema,
-} from "../manifest.js";
+import { secretsManifestSchema } from "../manifest.js";
 import { discoverManifests } from "../registry.js";
 
 export async function runValidate(cwd?: string): Promise<void> {
@@ -16,16 +13,6 @@ export async function runValidate(cwd?: string): Promise<void> {
       console.error(`❌ ${id} (${dir}/secrets.json):`);
       for (const issue of result.error.issues) {
         console.error(`   ${issue.path.join(".")}: ${issue.message}`);
-      }
-      errors += 1;
-      continue;
-    }
-    // Cross-field checks the schema can't express (depend on resolved profile).
-    const semanticIssues = checkFetchIncludeConsistency(result.data);
-    if (semanticIssues.length > 0) {
-      console.error(`❌ ${id} (${dir}/secrets.json):`);
-      for (const issue of semanticIssues) {
-        console.error(`   ${issue}`);
       }
       errors += 1;
     }

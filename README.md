@@ -36,28 +36,42 @@ Requires the [`infisical` CLI](https://infisical.com/docs/cli/overview) for loca
      projectIdEnvFile: ".env.infisical", // provides INFISICAL_PROJECT_ID
      discovery: { roots: ["apps", "services"], packages: [{ id: "postgres", dir: "infra/postgres" }] },
      auth: { oidcAudience: "https://github.com/your-org" },
-     hooks: { advertiseKeys: [{ envVar: "INFISCML_FLY_KEYS", scope: "runtime" }] },
+     hooks: { advertiseKeys: [{ envVar: "INFISICML_FLY_KEYS", scope: "runtime" }] },
    });
    ```
 
-2. Add a `secrets.json` next to each package:
+2. Add a `secrets.json` next to each package. `secrets` is an **array of
+   folders** mirroring your Infisical structure; each folder is
+   `{ "name": [ ...contents ] }`. Inside a folder's array, a **bare string** is a
+   plain key, an object with a **string value** `{ "SOURCE": "TARGET" }` is an
+   alias, and an object with an **array value** `{ "sub": [ ... ] }` is a
+   subfolder. Every emitted key is named (default-deny; there is no wildcard).
 
    ```jsonc
    {
-     "$schema": "https://cdn.jsdelivr.net/npm/@hubble-ventures/infisicml@1/schema/secrets.schema.json",
-     "paths": ["clerk", "posthog"],
+     "$schema": "https://cdn.jsdelivr.net/npm/@hubble-ventures/infisicml@2/schema/secrets.schema.json",
      "output": ".env", // written next to this manifest; defaults to .env.secrets
-     "aliases": {
-       // One canonical vault key → several prefixed copies in a single output.
-       "GOOGLE_MAPS_API_KEY": [
-         "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY",
-         "VITE_GOOGLE_MAPS_API_KEY"
-       ],
-       // A single target is also fine (string form).
-       "CLERK_PUBLISHABLE_KEY": "VITE_CLERK_PUBLISHABLE_KEY"
-     }
+     "secrets": [
+       // Canonical vault key → the prefixed name a build tool expects.
+       { "clerk": [{ "CLERK_PUBLISHABLE_KEY": "VITE_CLERK_PUBLISHABLE_KEY" }] },
+       // Fan one canonical key out to several prefixes: repeat the alias, one
+       // target each (an array value would mean a subfolder, not multi-target).
+       { "google": [
+         { "GOOGLE_MAPS_API_KEY": "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY" },
+         { "GOOGLE_MAPS_API_KEY": "VITE_GOOGLE_MAPS_API_KEY" }
+       ] },
+       { "posthog": [
+         "POSTHOG_PROJECT_TOKEN",
+         // A real Infisical subfolder at /posthog/eu.
+         { "eu": ["POSTHOG_EU_HOST"] }
+       ] }
+     ]
    }
    ```
+
+   An alias entry emits **both** its canonical name and the target. Keys you
+   don't name are never pulled, so a client package can share a vendor folder yet
+   emit only the public key — the server secret is simply undeclared.
 
 3. Pull secrets into gitignored `.env.secrets` files:
 
@@ -75,9 +89,9 @@ See [`examples/`](./examples) for a fuller config and manifest.
 |---|---|
 | `pull [ids...]` | Write `.env.secrets` locally (uses `infisical export`) |
 | `export-gha <id>` | Mask + append secrets to `GITHUB_ENV` (REST API + GitHub OIDC) |
-| `list` | Show every manifest and its Infisical paths |
+| `list` | Show every manifest's folder tree and declared keys |
 | `validate` | Validate every `secrets.json` against the schema |
-| `paths <id>` | Print resolved paths (`--comma` for scripting) |
+| `paths <id>` | Print resolved folder paths (`--comma` for scripting) |
 | `run <id> -- <cmd...>` | Thin `infisical run` wrapper (prefer `pull` + `.env.secrets`) |
 
 Common flags: `--env`, `--profile`, `--force`, `--here` (pull the cwd package), `--turbo` (always write, for Turbo caching).
@@ -132,89 +146,75 @@ Load `.env.secrets` however your dev runtime already loads env files. See [`exam
 
 ## Concepts
 
-- **Manifest (`secrets.json`)** — per package: `paths` (vault folders), optional `profiles`, `aliases`, `include`, `fetch`, `ci`, `environments`, `output`.
+- **Manifest (`secrets.json`)** — per package: `secrets` (an array of folders → keys), optional `profiles`, `fetch`, `ci`, `environments`, `output`.
 - **Output file** — `output` sets the written filename (default `.env.secrets`), placed **next to the manifest**. Because each package owns its own `secrets.json`, this gives a distinct file per package: a root manifest with `"output": ".env.local"` writes the repo-root `.env.local`; a manifest in `apps/backend` with `"output": ".env"` writes `apps/backend/.env`. `output` is a filename only (no path separators) — to target a different directory, place the manifest in that directory.
-- **Profiles** — named path sets that *replace* base `paths` when `--profile` is set. Base paths are runtime secrets; profile-only paths (e.g. `fly`) are deploy/release credentials.
-- **Aliases** — copy a canonical secret to extra tool-specific names. Each source maps to **one target (string) or many (array)**, so a single vault key can fan out to every framework prefix (`EXPO_PUBLIC_*`, `VITE_*`, `NEXT_PUBLIC_*`) in one output. Real secrets of a target name always win; the operation is idempotent and never overwrites.
-- **Include (key allowlist)** — `include` emits **only** the listed keys from whatever the folders yielded (default-deny key selection). Omit it and every key is emitted (unchanged). See [Key selection](#key-selection-include) below.
-- **Fetch mode** — `fetch: "keys"` requests only the keys `include` resolves to, so the vault never transmits the rest (wire-level least privilege). Default `"folder"` reads whole folders and filters locally. See [Wire-level least privilege](#wire-level-least-privilege-fetch-keys) below.
+- **Secrets tree** — an **array of folders** mirroring your Infisical vault; each folder is `{ "name": [ ...contents ] }`. Inside the array: a bare string is a plain key, an object with a string value `{ "SOURCE": "TARGET" }` is an alias, and an object with an array value `{ "sub": [ ... ] }` is a real subfolder. Every emitted key is named — there is no wildcard, so a folder never leaks a key you didn't declare (default-deny). See [Key selection](#key-selection-the-tree-is-the-allowlist) below.
+- **Profiles** — named alternate trees that *replace* the base `secrets` when `--profile` is set. The base tree is runtime secrets; a profile can add deploy/release folders (e.g. `fly`).
+- **Aliases** — an alias entry `{ "SOURCE": "TARGET" }` maps a canonical vault key to one target. To fan a single key out to every framework prefix (`EXPO_PUBLIC_*`, `VITE_*`, `NEXT_PUBLIC_*`), repeat the entry — one target each (an array value means a subfolder). Both the canonical name and each target are emitted. Real secrets of a target name always win; the operation is idempotent and never overwrites.
+- **Fetch mode** — `fetch: "keys"` requests only the declared keys, so the vault never transmits the rest (wire-level least privilege). Default `"folder"` reads whole folders and selects the declared keys locally. See [Wire-level least privilege](#wire-level-least-privilege-fetch-keys) below.
 - **CI skip/stub** — `ci.skipWhenEnv` skips the pull when all listed vars are already set in CI; `ci.stubInCi` always stubs in CI. Both write a `.env.secrets` from `process.env` instead of calling Infisical.
-- **Optional keys** — `environments.<slug>.optionalKeys` downgrade a missing key to a `::notice::` in `export-gha` instead of a failure.
+- **Optional keys** — `environments.<slug>.optionalKeys` downgrade a missing declared key to a `::notice::` instead of a failure.
 - **Advertise-keys hooks** — publish runtime key *names* (never values) to `GITHUB_ENV` for deploy forwarding.
 
-### Key selection (`include`)
+### Key selection (the tree is the allowlist)
 
 Vaults are often organized by **vendor, not by access scope** — a single `/stripe` folder
 holds both a server secret and a client-public key:
 
 ```
-/stripe → STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY
+/stripe → STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PUBLISHABLE_KEY
 ```
 
-A web/mobile client needs **only** the publishable key. With folder-only selection it would
-be forced to pull the whole folder — writing `STRIPE_SECRET_KEY` into a Vite/Expo client
-build's env (and, via the CI action, into `GITHUB_ENV` for jobs that shouldn't see it).
-
-`include` is a **default-deny allowlist**: only the listed env var names are emitted.
+A web/mobile client needs **only** the publishable key. Because the tree is default-deny, you
+name that one key and nothing else is pulled — `STRIPE_SECRET_KEY` is simply never declared,
+so it can't reach a Vite/Expo client build's env (or, via the CI action, `GITHUB_ENV`).
 
 ```jsonc
 // apps/web/secrets.json — a client package
 {
-  "paths": ["stripe", "google", "vercel"],
-  "aliases": {
-    "STRIPE_PUBLISHABLE_KEY": ["EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY"],
-    "GOOGLE_MAPS_API_KEY": ["EXPO_PUBLIC_GOOGLE_MAPS_API_KEY"]
-  },
-  "include": [
-    "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY",
-    "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY",
-    "EXPO_PUBLIC_VERCEL_AUTOMATION_BYPASS_SECRET"
+  "secrets": [
+    { "stripe": [{ "STRIPE_PUBLISHABLE_KEY": "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY" }] },
+    { "google": [{ "GOOGLE_MAPS_API_KEY": "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY" }] },
+    { "vercel": ["VERCEL_AUTOMATION_BYPASS_SECRET"] }
   ]
 }
 ```
 
-The written `.env.secrets` (and, in CI, `GITHUB_ENV`) contains **only** those three keys —
-server secrets in the same folders are never emitted.
+The written `.env.secrets` (and, in CI, `GITHUB_ENV`) contains **only** the declared keys and
+their alias targets — server secrets in the same folders are never emitted.
 
-- **Ordering** — folders are pulled, then `aliases` are applied, then `include` filters the
-  **final** set of names. So aliasing a canonical key to a public name and listing only the
-  public name in `include` drops the canonical key (and every other folder key). An alias
-  whose source isn't in `include` still emits its target.
-- **Names, not paths** — `include` is a flat list of env var names; key names must be unique
-  across a package's folders.
-- **Unknown keys** — a name in `include` that no folder produced is an error (fail the pull /
-  CI step), **unless** it's also in `environments.<slug>.optionalKeys`, which downgrades it to
-  a `::notice::`. Enforced the same way in `pull` and `export-gha`.
-- **Profiles** — a profile may set its own `include`, which **replaces** the root `include`
-  for that profile (like `profiles.<name>.paths`). A profile without `include` inherits the
-  root one.
-- **Backward compatible** — omit `include` and behavior is unchanged (every key is emitted).
+- **Provenance** — a key is emitted from the folder it's declared under, and only that folder.
+  Selection is per-folder, so the same name in two folders doesn't cross-contaminate.
+- **Alias emits both names** — an alias entry copies the canonical key to its target; *both*
+  the canonical name and the target land in the output. (To emit only a prefixed name, don't
+  declare the canonical one — but the canonical publishable key is usually harmless.)
+- **Unknown keys** — a declared key that its folder didn't produce is an error (fail the pull /
+  CI step), **unless** it's in `environments.<slug>.optionalKeys`, which downgrades it to a
+  `::notice::`. Enforced the same way in `pull` and `export-gha`.
+- **Profiles** — a profile supplies its own `secrets`, which **replaces** the root tree for that
+  profile.
 
 ### Wire-level least privilege (`fetch: "keys"`)
 
-`include` on its own is a **post-fetch filter**: infisicml pulls each whole folder, then drops
-the unwanted keys before writing the output. The excluded values still travel over the wire
-into your machine / the CI runner — they're just never written to `.env` or `GITHUB_ENV`. For
-most setups that's fine. When you need the vault to **not even transmit** the secrets you
-don't use, set `fetch: "keys"`:
+By default (`fetch: "folder"`) infisicml pulls each whole folder, then selects the declared
+keys before writing the output. The undeclared values still travel over the wire into your
+machine / the CI runner — they're just never written to `.env` or `GITHUB_ENV`. For most
+setups that's fine. When you need the vault to **not even transmit** the secrets you don't
+use, set `fetch: "keys"`:
 
 ```jsonc
 // apps/web/secrets.json — client package, strict wire-level least privilege
 {
-  "paths": ["stripe", "google"],
   "fetch": "keys",
-  "aliases": {
-    "STRIPE_PUBLISHABLE_KEY": ["EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY"]
-  },
-  "include": [
-    "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY",
-    "GOOGLE_MAPS_API_KEY"
+  "secrets": [
+    { "stripe": [{ "STRIPE_PUBLISHABLE_KEY": "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY" }] },
+    { "google": ["GOOGLE_MAPS_API_KEY"] }
   ]
 }
 ```
 
-In `keys` mode infisicml emits **only** the keys `include` resolves to. Where the guarantee
-bites depends on the lane:
+In `keys` mode infisicml reads **only** the declared keys. Where the guarantee bites depends on
+the lane:
 
 - **CI (`export-gha`)** — true **wire-level** least privilege: each key is fetched with the
   single-secret REST endpoint (`GET /api/v3/secrets/raw/{name}`), so the other keys in
@@ -225,23 +225,18 @@ bites depends on the lane:
   once and selects the keys. It narrows what's **written to disk**, not what the vault
   transmits — on your own machine, where folder mode already lands.
 
-- **Requires `include`** — key mode fetches exactly what `include` names, so an allowlist is
-  mandatory (root or the active profile). `validate` and the pull/CI step both enforce this.
-- **Aliases are reverse-mapped** — `include` names the *final* (post-alias) keys, so infisicml
-  fetches the canonical vault source behind each alias target. Above, listing
-  `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` fetches the canonical `STRIPE_PUBLISHABLE_KEY`.
-- **Imports still resolve** — a key surfaced into a `paths` folder via an Infisical import is
-  fetched in `keys` mode too (the per-key read follows imports but returns only that one
-  secret), so enabling `keys` never silently drops an import-backed key.
-- **Same emit result** — everything after the fetch (aliases, `include` filtering, unknown-key
-  enforcement, `optionalKeys`) is identical to folder mode; only what's read narrows.
-- **Cost** — in CI, one request **per key** instead of one per folder; the `paths` list becomes
+- **No allowlist needed** — the tree already names every canonical key (an alias entry's key
+  *is* the real vault key), so `keys` mode requests exactly those names directly — no reverse
+  mapping, and `keys` is always satisfiable.
+- **Imports still resolve** — a key surfaced into a folder via an Infisical import is fetched in
+  `keys` mode too (the per-key read follows imports but returns only that one secret), so
+  enabling `keys` never silently drops an import-backed key.
+- **Same emit result** — everything after the fetch (aliases, unknown-key enforcement,
+  `optionalKeys`) is identical to folder mode; only what's read narrows.
+- **Cost** — in CI, one request **per key** instead of one per folder; the folder list becomes
   advisory (`infisicml paths` notes this).
-- **Profiles** — a profile may set its own `fetch`, which **replaces** the root value (like
-  `paths` / `include`). A deploy profile can stay in `folder` mode while the runtime default
-  is `keys`, or vice versa.
-- **Backward compatible** — omit `fetch` (or set `"folder"`) and behavior is byte-for-byte
-  unchanged.
+- **Profiles** — a profile may set its own `fetch`, which **replaces** the root value. A deploy
+  profile can stay in `folder` mode while the runtime default is `keys`, or vice versa.
 
 ### Non-secret defaults (`.env.sample`)
 
@@ -289,7 +284,7 @@ git tag v1.2.3 && git push origin main --tags
 The workflow builds + tests the tagged commit, publishes to npm via **trusted
 publishing** (OIDC — no `NPM_TOKEN` secret, provenance attached automatically),
 creates a GitHub Release from the matching [`CHANGELOG.md`](./CHANGELOG.md) section, and
-moves the floating `v1` tag to the release commit. The publish step is idempotent — a
+moves the floating major tag (e.g. `v2`) to the release commit. The publish step is idempotent — a
 version already on npm is skipped.
 
 > **First publish (one time).** The `@hubble-ventures` npm **organization** must exist,

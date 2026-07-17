@@ -24,6 +24,6 @@ export default defineConfig({
   // forwards exactly those (e.g. `flyctl secrets import`), keeping secrets.json
   // the source of truth for what a deploy forwards.
   hooks: {
-    advertiseKeys: [{ envVar: "INFISCML_FLY_KEYS", scope: "runtime" }],
+    advertiseKeys: [{ envVar: "INFISICML_FLY_KEYS", scope: "runtime" }],
   },
 });

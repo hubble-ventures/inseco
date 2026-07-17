@@ -4,9 +4,11 @@ export {
   resolveAliases,
 } from "./aliases.js";
 export {
-  fetchSecretsForPaths,
+  fetchCompiledFolders,
+  type FolderSecrets,
   isCi,
   keysForCiStub,
+  materializeSecrets,
   mergeFolderSecrets,
   shouldSkipInfisicalPull,
 } from "./ci-skip.js";
@@ -30,17 +32,12 @@ export {
   keysForScope,
   runAdvertiseKeysHooks,
 } from "./hooks.js";
-export {
-  applyInclude,
-  enforceIncludeKnown,
-  type IncludeResult,
-  selectEmittedSecrets,
-} from "./include.js";
+export { enforceKnownKeys } from "./include.js";
 export {
   loadManifestJson,
   normalizeFolderPath,
-  resolveInclude,
-  resolvePaths,
+  resolveCompiledFolders,
+  resolveFetchMode,
   resolveSecretsOutputPath,
   type SecretsManifest,
   secretsManifestSchema,
@@ -58,3 +55,12 @@ export {
   writeInjectedSecretsStub,
 } from "./pull.js";
 export { discoverManifests, type PackageManifest } from "./registry.js";
+export {
+  type CompiledFolder,
+  type CompiledKey,
+  compileTree,
+  type FolderArray,
+  type FolderEntry,
+  type SecretsTree,
+  treeSchema,
+} from "./tree.js";

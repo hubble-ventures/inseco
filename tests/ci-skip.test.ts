@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
-  fetchManifestSecrets,
-  fetchSecretsForKeys,
+  fetchCompiledFolders,
   isCi,
   keysForCiStub,
+  materializeSecrets,
   shouldSkipInfisicalPull,
 } from "../src/ci-skip.js";
 import { loadManifestJson } from "../src/manifest.js";
 import type { SecretsProvider } from "../src/providers/types.js";
+import { compileTree } from "../src/tree.js";
 
 /** Provider whose folders each hold a declared slice of a global key set. */
 function folderKeyProvider(
@@ -33,12 +34,12 @@ function folderKeyProvider(
 
 describe("ci-skip", () => {
   const withSkipWhen = loadManifestJson({
-    paths: ["clerk"],
+    secrets: [{ clerk: ["CLERK_SECRET_KEY"] }],
     ci: { skipWhenEnv: ["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"] },
   });
 
   const withStub = loadManifestJson({
-    paths: ["clerk"],
+    secrets: [{ clerk: ["CLERK_SECRET_KEY"] }],
     ci: { stubInCi: true },
   });
 
@@ -92,63 +93,116 @@ describe("ci-skip", () => {
   });
 });
 
-describe("fetchSecretsForKeys / fetchManifestSecrets", () => {
-  it("merges per-key reads across folders (keys spanning paths)", async () => {
-    const { provider } = folderKeyProvider({
+describe("fetchCompiledFolders + materializeSecrets", () => {
+  it("keys mode merges per-key reads across folders", async () => {
+    const { provider, keyCalls } = folderKeyProvider({
       clerk: { CLERK_SECRET_KEY: "sk" },
       stripe: { STRIPE_SECRET_KEY: "ss" },
     });
-    const merged = await fetchSecretsForKeys(
+    const folders = compileTree([
+      { clerk: ["CLERK_SECRET_KEY"] },
+      { stripe: ["STRIPE_SECRET_KEY"] },
+    ]);
+    const fetched = await fetchCompiledFolders(
       provider,
       "development",
-      ["clerk", "stripe"],
-      ["CLERK_SECRET_KEY", "STRIPE_SECRET_KEY"]
+      folders,
+      "keys"
     );
-    expect(merged).toEqual({
+    expect(materializeSecrets(fetched, [])).toEqual({
       CLERK_SECRET_KEY: "sk",
       STRIPE_SECRET_KEY: "ss",
     });
+    expect(keyCalls).toEqual([
+      ["clerk", ["CLERK_SECRET_KEY"]],
+      ["stripe", ["STRIPE_SECRET_KEY"]],
+    ]);
   });
 
   it("folder mode reads whole folders (no per-key calls)", async () => {
     const { provider, keyCalls } = folderKeyProvider({
       clerk: { A: "1", B: "2" },
     });
-    const m = loadManifestJson({ paths: ["clerk"] });
-    const merged = await fetchManifestSecrets(
+    const folders = compileTree([{ clerk: ["A", "B"] }]);
+    const fetched = await fetchCompiledFolders(
       provider,
       "development",
-      ["clerk"],
-      m
+      folders,
+      "folder"
     );
-    expect(merged).toEqual({ A: "1", B: "2" });
+    expect(materializeSecrets(fetched, [])).toEqual({ A: "1", B: "2" });
     expect(keyCalls).toHaveLength(0);
   });
 
-  it("keys mode fetches only the resolved include keys", async () => {
+  it("folder mode selects only the declared keys (provenance-aware)", async () => {
+    // The folder returns an extra, undeclared secret; it must not be emitted.
+    const { provider } = folderKeyProvider({
+      stripe: { STRIPE_SECRET_KEY: "ss", STRIPE_PUBLISHABLE_KEY: "pk" },
+    });
+    const folders = compileTree([{ stripe: ["STRIPE_PUBLISHABLE_KEY"] }]);
+    const fetched = await fetchCompiledFolders(
+      provider,
+      "development",
+      folders,
+      "folder"
+    );
+    expect(materializeSecrets(fetched, [])).toEqual({
+      STRIPE_PUBLISHABLE_KEY: "pk",
+    });
+  });
+
+  it("keys mode fetches only the declared keys", async () => {
     const { provider, keyCalls } = folderKeyProvider({
       stripe: { STRIPE_SECRET_KEY: "ss", STRIPE_PUBLISHABLE_KEY: "pk" },
     });
-    const m = loadManifestJson({
-      paths: ["stripe"],
-      fetch: "keys",
-      include: ["STRIPE_PUBLISHABLE_KEY"],
-    });
-    const merged = await fetchManifestSecrets(
+    const folders = compileTree([{ stripe: ["STRIPE_PUBLISHABLE_KEY"] }]);
+    const fetched = await fetchCompiledFolders(
       provider,
       "development",
-      ["stripe"],
-      m
+      folders,
+      "keys"
     );
-    expect(merged).toEqual({ STRIPE_PUBLISHABLE_KEY: "pk" });
+    expect(materializeSecrets(fetched, [])).toEqual({
+      STRIPE_PUBLISHABLE_KEY: "pk",
+    });
     expect(keyCalls).toEqual([["stripe", ["STRIPE_PUBLISHABLE_KEY"]]]);
   });
 
-  it("throws in keys mode without an include", async () => {
-    const { provider } = folderKeyProvider({ stripe: {} });
-    const m = loadManifestJson({ paths: ["stripe"], fetch: "keys" });
-    await expect(
-      fetchManifestSecrets(provider, "development", ["stripe"], m)
-    ).rejects.toThrow(/requires an include allowlist/);
+  it("expands aliases from the FOLDER-LOCAL value, not the flat merge", () => {
+    // /a and /b both declare a key named TOKEN with different values and
+    // different alias targets. Each target must carry its own folder's value —
+    // the pre-fix flat merge kept only one TOKEN and routed it to both.
+    const folders = compileTree([
+      { a: [{ TOKEN: "A_TOKEN" }] },
+      { b: [{ TOKEN: "B_TOKEN" }] },
+    ]);
+    const fetched = [
+      { folder: folders[0], selected: { TOKEN: "a" } },
+      { folder: folders[1], selected: { TOKEN: "b" } },
+    ];
+    const merged = materializeSecrets(fetched, []);
+    expect(merged.A_TOKEN).toBe("a");
+    expect(merged.B_TOKEN).toBe("b");
+  });
+
+  it("enforces missing keys per folder, not by global name", () => {
+    // TOKEN is declared in both /a and /b but only /b returns it. The /a
+    // declaration is still a genuine miss and must fail — the flat map would
+    // have contained TOKEN (from /b) and passed.
+    const folders = compileTree([{ a: ["TOKEN"] }, { b: ["TOKEN"] }]);
+    const fetched = [
+      { folder: folders[0], selected: {} },
+      { folder: folders[1], selected: { TOKEN: "b" } },
+    ];
+    expect(() => materializeSecrets(fetched, [])).toThrow(/TOKEN/);
+  });
+
+  it("allows a per-folder miss when the key name is optional", () => {
+    const folders = compileTree([{ a: ["TOKEN"] }, { b: ["TOKEN"] }]);
+    const fetched = [
+      { folder: folders[0], selected: {} },
+      { folder: folders[1], selected: { TOKEN: "b" } },
+    ];
+    expect(materializeSecrets(fetched, ["TOKEN"])).toEqual({ TOKEN: "b" });
   });
 });
