@@ -1,6 +1,6 @@
 export { applyAliases, type ResolvedAlias, resolveAliases, } from "./aliases.js";
 export { fetchSecretsForPaths, isCi, keysForCiStub, mergeFolderSecrets, shouldSkipInfisicalPull, } from "./ci-skip.js";
-export { type AdvertiseKeysHook, defineConfig, type DiscoveryConfig, type InsecoConfig, loadConfig, type ResolvedConfig, } from "./config.js";
+export { type AdvertiseKeysHook, defineConfig, type DiscoveryConfig, type InfiscmlConfig, loadConfig, type ResolvedConfig, } from "./config.js";
 export { parseDotenv, serializeDotenv } from "./dotenv.js";
 export { normalizeEnvSlug } from "./env-slug.js";
 export { appendPlainToGithubEnv, appendSecretsToGithubEnv, appendSecretToGithubEnv, } from "./github-env.js";

@@ -35,7 +35,7 @@ describe("github-env", () => {
     expect(stdout).toContain("::add-mask::line1");
     expect(stdout).toContain("::add-mask::line2");
     expect(content).not.toContain("::add-mask::");
-    expect(content).toMatch(/MY_KEY<<INSECO_MY_KEY_/);
+    expect(content).toMatch(/MY_KEY<<INFISCML_MY_KEY_/);
     expect(content).toContain("line1\nline2");
   });
 
@@ -62,9 +62,9 @@ describe("github-env", () => {
     tempDir = mkdtempSync(join(tmpdir(), "gha-env-"));
     const envFile = join(tempDir, "GITHUB_ENV");
     captureStdout();
-    appendPlainToGithubEnv(envFile, "INSECO_FLY_KEYS", "A,B,C");
+    appendPlainToGithubEnv(envFile, "INFISCML_FLY_KEYS", "A,B,C");
     expect(stdout).not.toContain("::add-mask::");
-    expect(readFileSync(envFile, "utf8")).toBe("INSECO_FLY_KEYS=A,B,C\n");
+    expect(readFileSync(envFile, "utf8")).toBe("INFISCML_FLY_KEYS=A,B,C\n");
   });
 
   it("rejects multiline plain values", () => {

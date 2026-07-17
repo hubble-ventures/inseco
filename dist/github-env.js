@@ -9,7 +9,7 @@ export function appendSecretToGithubEnv(githubEnvPath, key, value) {
         const masked = line.replaceAll("%", "%25");
         process.stdout.write(`::add-mask::${masked}\n`);
     }
-    let delim = `INSECO_${key}_${Date.now()}${process.hrtime.bigint()}`;
+    let delim = `INFISCML_${key}_${Date.now()}${process.hrtime.bigint()}`;
     while (value.includes(delim)) {
         delim = `${delim}_`;
     }

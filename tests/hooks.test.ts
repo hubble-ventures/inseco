@@ -38,20 +38,20 @@ describe("hooks — advertise keys", () => {
   });
 
   it("writes each hook's key list as a plain GITHUB_ENV var", () => {
-    tempDir = mkdtempSync(join(tmpdir(), "inseco-hooks-"));
+    tempDir = mkdtempSync(join(tmpdir(), "infiscml-hooks-"));
     const envFile = join(tempDir, "GITHUB_ENV");
     runAdvertiseKeysHooks(
       envFile,
-      [{ envVar: "INSECO_FLY_KEYS", scope: "runtime" }],
+      [{ envVar: "INFISCML_FLY_KEYS", scope: "runtime" }],
       input
     );
     expect(readFileSync(envFile, "utf8")).toBe(
-      "INSECO_FLY_KEYS=CLERK_PUBLISHABLE_KEY,CLERK_SECRET_KEY\n"
+      "INFISCML_FLY_KEYS=CLERK_PUBLISHABLE_KEY,CLERK_SECRET_KEY\n"
     );
   });
 
   it("no-ops when no hooks are configured", () => {
-    tempDir = mkdtempSync(join(tmpdir(), "inseco-hooks-"));
+    tempDir = mkdtempSync(join(tmpdir(), "infiscml-hooks-"));
     const envFile = join(tempDir, "GITHUB_ENV");
     runAdvertiseKeysHooks(envFile, undefined, input);
     expect(() => readFileSync(envFile, "utf8")).toThrow();
