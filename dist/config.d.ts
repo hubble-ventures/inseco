@@ -1,11 +1,12 @@
 /**
- * How Infisicml discovers per-package `secrets.json` manifests. Discovery is
- * driven entirely by config, so no repo layout is baked into the tool.
+ * How Infisicml discovers per-package secrets manifests (`secrets.yaml`, or
+ * `secrets.json`). Discovery is driven entirely by config, so no repo layout is
+ * baked into the tool.
  */
 export type DiscoveryConfig = {
     /**
      * Parent directories scanned one level deep. Any immediate child directory
-     * containing a `secrets.json` becomes a package whose id is the child dir
+     * containing a secrets manifest becomes a package whose id is the child dir
      * name (e.g. `roots: ["nextjs-apps", "vite-apps"]`).
      */
     roots?: string[];

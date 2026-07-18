@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  findManifestFile,
+  loadManifestFromDir,
   loadManifestJson,
   resolveCompiledFolders,
   resolveFetchMode,
@@ -124,5 +129,62 @@ describe("manifest", () => {
     expect(resolveOptionalKeys(m, "preview")).toEqual([
       "CLERK_WEBHOOK_SIGNING_SECRET",
     ]);
+  });
+
+  describe("manifest file discovery (YAML primary, JSON supported)", () => {
+    let dir: string;
+    beforeEach(() => {
+      dir = mkdtempSync(join(tmpdir(), "infisicml-manifest-"));
+    });
+    afterEach(() => {
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    it("returns null when no manifest exists", () => {
+      expect(findManifestFile(dir)).toBeNull();
+      expect(loadManifestFromDir(dir)).toBeNull();
+    });
+
+    it("loads and parses a YAML manifest", () => {
+      writeFileSync(
+        join(dir, "secrets.yaml"),
+        "secrets:\n  - clerk:\n      - CLERK_SECRET_KEY\n"
+      );
+      const loaded = loadManifestFromDir(dir);
+      expect(loaded?.file.format).toBe("yaml");
+      expect(resolveCompiledFolders(loaded!.manifest).map((f) => f.path)).toEqual(
+        ["clerk"]
+      );
+    });
+
+    it("loads and parses a JSON manifest", () => {
+      writeFileSync(
+        join(dir, "secrets.json"),
+        JSON.stringify({ secrets: [{ clerk: ["CLERK_SECRET_KEY"] }] })
+      );
+      const loaded = loadManifestFromDir(dir);
+      expect(loaded?.file.format).toBe("json");
+      expect(resolveCompiledFolders(loaded!.manifest).map((f) => f.path)).toEqual(
+        ["clerk"]
+      );
+    });
+
+    it("prefers secrets.yaml over secrets.json when both exist", () => {
+      writeFileSync(join(dir, "secrets.yaml"), "secrets:\n  - from-yaml: [A]\n");
+      writeFileSync(
+        join(dir, "secrets.json"),
+        JSON.stringify({ secrets: [{ "from-json": ["A"] }] })
+      );
+      const loaded = loadManifestFromDir(dir);
+      expect(loaded?.file.filename).toBe("secrets.yaml");
+      expect(resolveCompiledFolders(loaded!.manifest).map((f) => f.path)).toEqual(
+        ["from-yaml"]
+      );
+    });
+
+    it("supports the .yml extension", () => {
+      writeFileSync(join(dir, "secrets.yml"), "secrets:\n  - clerk: [K]\n");
+      expect(findManifestFile(dir)?.format).toBe("yaml");
+    });
   });
 });

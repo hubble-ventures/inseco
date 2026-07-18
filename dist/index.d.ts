@@ -6,7 +6,7 @@ export { normalizeEnvSlug } from "./env-slug.js";
 export { appendPlainToGithubEnv, appendSecretsToGithubEnv, appendSecretToGithubEnv, } from "./github-env.js";
 export { type AdvertiseInput, keysForScope, runAdvertiseKeysHooks, } from "./hooks.js";
 export { enforceKnownKeys } from "./include.js";
-export { loadManifestJson, normalizeFolderPath, resolveCompiledFolders, resolveFetchMode, resolveSecretsOutputPath, type SecretsManifest, secretsManifestSchema, } from "./manifest.js";
+export { findManifestFile, loadManifestFromDir, loadManifestJson, MANIFEST_FILENAMES, MANIFEST_LABEL, type ManifestFile, type ManifestFormat, normalizeFolderPath, parseManifestFile, resolveCompiledFolders, resolveFetchMode, resolveSecretsOutputPath, type SecretsManifest, secretsManifestSchema, } from "./manifest.js";
 export { logMissingOptionalKeys, resolveOptionalKeys, } from "./optional-keys.js";
 export { commandExists, LocalProvider } from "./providers/local.js";
 export { RemoteProvider } from "./providers/remote.js";

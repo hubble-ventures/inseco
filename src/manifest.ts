@@ -1,4 +1,6 @@
-import { resolve, sep } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { join, resolve, sep } from "node:path";
+import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 import {
   type CompiledFolder,
@@ -62,6 +64,71 @@ export function loadManifestJson(raw: unknown): SecretsManifest {
   return secretsManifestSchema.parse(raw);
 }
 
+// Manifest filenames in preference order. YAML is the primary, recommended
+// format; JSON stays fully supported for anyone who prefers it (or generates
+// manifests programmatically). The first file that exists in a package
+// directory wins, so `secrets.yaml` shadows a stray `secrets.json`.
+export const MANIFEST_FILENAMES = [
+  "secrets.yaml",
+  "secrets.yml",
+  "secrets.json",
+] as const;
+
+/** A generic name for the manifest, for messages that shouldn't hardcode an extension. */
+export const MANIFEST_LABEL = "secrets manifest";
+
+export type ManifestFormat = "yaml" | "json";
+
+export type ManifestFile = {
+  /** Absolute (or as-passed) path to the manifest file. */
+  path: string;
+  /** Bare filename, e.g. `secrets.yaml`. */
+  filename: string;
+  format: ManifestFormat;
+};
+
+/**
+ * Locate the manifest file in `dir`, preferring YAML over JSON
+ * ({@link MANIFEST_FILENAMES}). Returns `null` when no manifest exists.
+ */
+export function findManifestFile(dir: string): ManifestFile | null {
+  for (const filename of MANIFEST_FILENAMES) {
+    const path = join(dir, filename);
+    if (existsSync(path)) {
+      return {
+        path,
+        filename,
+        format: filename.endsWith(".json") ? "json" : "yaml",
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * Parse a manifest file's contents into the raw object, dispatching on format.
+ * YAML is a superset of JSON, but we parse each with its own reader so error
+ * messages point at the right syntax. Does not validate against the schema —
+ * call {@link loadManifestJson} for that.
+ */
+export function parseManifestFile(file: ManifestFile): unknown {
+  const raw = readFileSync(file.path, "utf8");
+  return file.format === "yaml" ? parseYaml(raw) : JSON.parse(raw);
+}
+
+/**
+ * Find, read, parse, and schema-validate the manifest in `dir`. Returns the
+ * validated manifest plus the file it came from, or `null` when no manifest
+ * file exists.
+ */
+export function loadManifestFromDir(
+  dir: string
+): { manifest: SecretsManifest; file: ManifestFile } | null {
+  const file = findManifestFile(dir);
+  if (!file) return null;
+  return { manifest: loadManifestJson(parseManifestFile(file)), file };
+}
+
 /**
  * Compile the effective folder tree into an ordered {@link CompiledFolder} list.
  * A profile's `tree` replaces the root `tree` when a profile is set (same
@@ -74,7 +141,7 @@ export function resolveCompiledFolders(
   if (profile) {
     const profileConfig = manifest.profiles?.[profile];
     if (!profileConfig) {
-      throw new Error(`Unknown profile '${profile}' in secrets.json`);
+      throw new Error(`Unknown profile '${profile}' in ${MANIFEST_LABEL}`);
     }
     return compileTree(profileConfig.secrets);
   }

@@ -24,6 +24,17 @@ describe("config + registry", () => {
     expect(manifests.map((m) => m.id)).toEqual(["api", "postgres", "web"]);
   });
 
+  it("discovers YAML and JSON manifests side by side", async () => {
+    const config = await loadConfig(fixtureRepo);
+    const manifests = discoverManifests(config);
+    const byId = Object.fromEntries(manifests.map((m) => [m.id, m.file]));
+    // web/secrets.yaml (YAML primary) and api/secrets.json (JSON supported).
+    expect(byId.web.format).toBe("yaml");
+    expect(byId.web.filename).toBe("secrets.yaml");
+    expect(byId.api.format).toBe("json");
+    expect(byId.api.filename).toBe("secrets.json");
+  });
+
   it("derives package id from the roots child directory name", async () => {
     const config = await loadConfig(fixtureRepo);
     const web = discoverManifests(config).find((m) => m.id === "web");

@@ -34,8 +34,15 @@ export {
 } from "./hooks.js";
 export { enforceKnownKeys } from "./include.js";
 export {
+  findManifestFile,
+  loadManifestFromDir,
   loadManifestJson,
+  MANIFEST_FILENAMES,
+  MANIFEST_LABEL,
+  type ManifestFile,
+  type ManifestFormat,
   normalizeFolderPath,
+  parseManifestFile,
   resolveCompiledFolders,
   resolveFetchMode,
   resolveSecretsOutputPath,

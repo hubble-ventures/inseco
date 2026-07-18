@@ -1,30 +1,33 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { ResolvedConfig } from "./config.js";
-import { loadManifestJson, type SecretsManifest } from "./manifest.js";
+import {
+  loadManifestFromDir,
+  type ManifestFile,
+  type SecretsManifest,
+} from "./manifest.js";
 
 export type PackageManifest = {
   id: string;
   dir: string;
   config: SecretsManifest;
+  /** The manifest file this package was loaded from (YAML or JSON). */
+  file: ManifestFile;
 };
 
 /**
- * Discover every `secrets.json` in the repo, driven entirely by
- * `config.discovery` — no repo-specific directory constants. Explicit
- * `packages` win over `roots`-discovered entries at the same directory.
+ * Discover every secrets manifest in the repo (YAML preferred, JSON supported),
+ * driven entirely by `config.discovery` — no repo-specific directory constants.
+ * Explicit `packages` win over `roots`-discovered entries at the same directory.
  */
 export function discoverManifests(config: ResolvedConfig): PackageManifest[] {
   const { repoRoot } = config;
   const byDir = new Map<string, PackageManifest>();
 
   const scanDir = (dir: string, id: string) => {
-    const manifestPath = join(dir, "secrets.json");
-    if (!existsSync(manifestPath)) return;
-    const parsed = loadManifestJson(
-      JSON.parse(readFileSync(manifestPath, "utf8"))
-    );
-    byDir.set(resolve(dir), { dir, id, config: parsed });
+    const loaded = loadManifestFromDir(dir);
+    if (!loaded) return;
+    byDir.set(resolve(dir), { dir, id, config: loaded.manifest, file: loaded.file });
   };
 
   for (const root of config.discovery.roots ?? []) {

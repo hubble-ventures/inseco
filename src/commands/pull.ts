@@ -32,7 +32,7 @@ export async function runPull(options: PullOptions): Promise<void> {
     const cwd = process.cwd();
     const match = manifests.find((m) => resolve(m.dir) === resolve(cwd));
     if (!match) {
-      throw new Error(`No secrets.json in ${cwd}`);
+      throw new Error(`No secrets manifest in ${cwd}`);
     }
     manifests = [match];
   } else if (options.ids.length > 0) {
@@ -47,7 +47,7 @@ export async function runPull(options: PullOptions): Promise<void> {
   }
 
   if (manifests.length === 0) {
-    console.log("No secrets.json manifests found.");
+    console.log("No secrets manifests found.");
     return;
   }
 

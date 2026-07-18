@@ -12,7 +12,7 @@ inputs:
     description: 'Infisical environment slug (development, preview, production)'
     required: true
   profile:
-    description: 'Optional secrets.json profile (e.g. deploy, release)'
+    description: 'Optional manifest profile (e.g. deploy, release)'
     required: false
     default: ''
   project-slug:

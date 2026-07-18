@@ -67,6 +67,38 @@ export declare const secretsManifestSchema: z.ZodObject<{
 }>;
 export type SecretsManifest = z.infer<typeof secretsManifestSchema>;
 export declare function loadManifestJson(raw: unknown): SecretsManifest;
+export declare const MANIFEST_FILENAMES: readonly ["secrets.yaml", "secrets.yml", "secrets.json"];
+/** A generic name for the manifest, for messages that shouldn't hardcode an extension. */
+export declare const MANIFEST_LABEL = "secrets manifest";
+export type ManifestFormat = "yaml" | "json";
+export type ManifestFile = {
+    /** Absolute (or as-passed) path to the manifest file. */
+    path: string;
+    /** Bare filename, e.g. `secrets.yaml`. */
+    filename: string;
+    format: ManifestFormat;
+};
+/**
+ * Locate the manifest file in `dir`, preferring YAML over JSON
+ * ({@link MANIFEST_FILENAMES}). Returns `null` when no manifest exists.
+ */
+export declare function findManifestFile(dir: string): ManifestFile | null;
+/**
+ * Parse a manifest file's contents into the raw object, dispatching on format.
+ * YAML is a superset of JSON, but we parse each with its own reader so error
+ * messages point at the right syntax. Does not validate against the schema —
+ * call {@link loadManifestJson} for that.
+ */
+export declare function parseManifestFile(file: ManifestFile): unknown;
+/**
+ * Find, read, parse, and schema-validate the manifest in `dir`. Returns the
+ * validated manifest plus the file it came from, or `null` when no manifest
+ * file exists.
+ */
+export declare function loadManifestFromDir(dir: string): {
+    manifest: SecretsManifest;
+    file: ManifestFile;
+} | null;
 /**
  * Compile the effective folder tree into an ordered {@link CompiledFolder} list.
  * A profile's `tree` replaces the root `tree` when a profile is set (same
