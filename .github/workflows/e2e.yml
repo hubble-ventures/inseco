@@ -14,8 +14,8 @@ name: E2E (composite action, live Infisical)
 #   INFISICML_E2E_EXPECT_KEY    (optional) a key name the action should export
 #
 # The checkout must also contain an `infisicml.config.{json,ts,js}` and a matching
-# `secrets.json` for INFISICML_E2E_PACKAGE_ID (a small sandbox fixture at the repo
-# root is fine). Without the required vars the job fails early with instructions.
+# `secrets.{yaml,yml,json}` for INFISICML_E2E_PACKAGE_ID (a small sandbox fixture at
+# the repo root is fine). Without the required vars the job fails early with instructions.
 
 on:
   workflow_dispatch:
@@ -49,7 +49,7 @@ jobs:
           [ -z "$IDENTITY" ] && missing="$missing INFISICAL_IDENTITY_ID"
           [ -z "$PKG" ] && missing="$missing INFISICML_E2E_PACKAGE_ID(or input)"
           if [ -n "$missing" ]; then
-            echo "::error::Missing required config:$missing — set these repo Variables and add a sandbox infisicml.config + secrets.json before running the e2e."
+            echo "::error::Missing required config:$missing — set these repo Variables and add a sandbox infisicml.config + secrets manifest (secrets.yaml or secrets.json) before running the e2e."
             exit 1
           fi
 
