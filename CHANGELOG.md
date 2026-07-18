@@ -12,8 +12,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `secrets.yaml`, `secrets.yml`, or `secrets.json` — the same schema either way.
   YAML is the default and reads best for hand-authored manifests; JSON stays
   fully supported (handy for generated manifests). Discovery prefers YAML: when a
-  directory has more than one, `secrets.yaml` wins. No migration is required —
-  existing `secrets.json` files keep working unchanged.
+  directory has more than one, `secrets.yaml` wins **and a warning names the
+  shadowed file** so a stale extra manifest never silently changes what's pulled.
+  No migration is required — existing `secrets.json` files keep working
+  unchanged.
 
   ```yaml
   # secrets.yaml

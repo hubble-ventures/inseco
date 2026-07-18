@@ -62,19 +62,25 @@ export const MANIFEST_LABEL = "secrets manifest";
 /**
  * Locate the manifest file in `dir`, preferring YAML over JSON
  * ({@link MANIFEST_FILENAMES}). Returns `null` when no manifest exists.
+ *
+ * When a directory holds more than one manifest file, the preference order
+ * picks the winner and a warning names the shadowed file(s) — so a stale or
+ * experimental `secrets.yaml` left next to the intended `secrets.json` (or vice
+ * versa) never silently changes which secret tree is pulled.
  */
 export function findManifestFile(dir) {
-    for (const filename of MANIFEST_FILENAMES) {
-        const path = join(dir, filename);
-        if (existsSync(path)) {
-            return {
-                path,
-                filename,
-                format: filename.endsWith(".json") ? "json" : "yaml",
-            };
-        }
+    const present = MANIFEST_FILENAMES.filter((name) => existsSync(join(dir, name)));
+    if (present.length === 0)
+        return null;
+    const [filename, ...shadowed] = present;
+    if (shadowed.length > 0) {
+        console.warn(`⚠️  Multiple secrets manifests in ${dir}: using ${filename}, ignoring ${shadowed.join(", ")}. Remove the extra file(s) to silence this.`);
     }
-    return null;
+    return {
+        path: join(dir, filename),
+        filename,
+        format: filename.endsWith(".json") ? "json" : "yaml",
+    };
 }
 /**
  * Parse a manifest file's contents into the raw object, dispatching on format.
