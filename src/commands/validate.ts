@@ -7,10 +7,10 @@ export async function runValidate(cwd?: string): Promise<void> {
   const manifests = discoverManifests(config);
   let errors = 0;
 
-  for (const { id, dir, config: m } of manifests) {
+  for (const { id, config: m, file } of manifests) {
     const result = secretsManifestSchema.safeParse(m);
     if (!result.success) {
-      console.error(`❌ ${id} (${dir}/secrets.json):`);
+      console.error(`❌ ${id} (${file.path}):`);
       for (const issue of result.error.issues) {
         console.error(`   ${issue.path.join(".")}: ${issue.message}`);
       }

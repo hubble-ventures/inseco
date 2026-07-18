@@ -13,7 +13,8 @@ infisical login           # authenticate as yourself (opens a browser)
 ```
 
 Add an `infisicml.config.ts` at the repo root (see [`infisicml.config.ts`](./infisicml.config.ts))
-and a `secrets.json` next to each package (see [`secrets.json`](./secrets.json)).
+and a manifest next to each package (see [`yaml/secrets.yaml`](./yaml/secrets.yaml),
+or [`json/secrets.json`](./json/secrets.json) for the JSON form).
 
 ## Everyday flow
 
@@ -28,7 +29,7 @@ npx infisicml pull api --force
 cd apps/api && npx infisicml --here pull
 ```
 
-Each `.env.secrets` is written next to its `secrets.json`. Load it however your
+Each `.env.secrets` is written next to its manifest. Load it however your
 dev runtime already loads env files — for example a package script:
 
 ```jsonc

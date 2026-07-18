@@ -4,7 +4,7 @@
 # committed fixture repo, exercising every command that does not require a live
 # Infisical session:
 #
-#   validate  — schema-checks every secrets.json
+#   validate  — schema-checks every manifest (YAML + JSON fixtures)
 #   list      — prints manifests + profile paths
 #   paths     — resolves a package's vault paths
 #   pull      — writes a real .env.secrets via the CI-stub path (no Infisical)

@@ -67,6 +67,51 @@ export declare const secretsManifestSchema: z.ZodObject<{
 }>;
 export type SecretsManifest = z.infer<typeof secretsManifestSchema>;
 export declare function loadManifestJson(raw: unknown): SecretsManifest;
+export declare const MANIFEST_FILENAMES: readonly ["secrets.yaml", "secrets.yml", "secrets.json"];
+/** A generic name for the manifest, for messages that shouldn't hardcode an extension. */
+export declare const MANIFEST_LABEL = "secrets manifest";
+export type ManifestFormat = "yaml" | "json";
+export type ManifestFile = {
+    /** Absolute (or as-passed) path to the manifest file. */
+    path: string;
+    /** Bare filename, e.g. `secrets.yaml`. */
+    filename: string;
+    format: ManifestFormat;
+};
+/**
+ * Locate the manifest file in `dir`, preferring YAML over JSON
+ * ({@link MANIFEST_FILENAMES}). Returns `null` when no manifest exists.
+ *
+ * A directory with more than one manifest file is a hard error: picking a winner
+ * by preference order would let a stale or experimental `secrets.yaml` left next
+ * to the intended `secrets.json` (or vice versa) silently change which secret
+ * tree is pulled — and non-interactive lanes (the GitHub Action's `export-gha`)
+ * would write it into `GITHUB_ENV` and still succeed. Refuse instead of guessing;
+ * the operator removes the extra file to resolve.
+ */
+/**
+ * Cheap presence check: does `dir` hold at least one manifest file? Used to
+ * enumerate package directories without parsing or resolving ambiguity, so
+ * discovery never throws on a manifest a command won't actually load.
+ */
+export declare function hasManifestFile(dir: string): boolean;
+export declare function findManifestFile(dir: string): ManifestFile | null;
+/**
+ * Parse a manifest file's contents into the raw object, dispatching on format.
+ * YAML is a superset of JSON, but we parse each with its own reader so error
+ * messages point at the right syntax. Does not validate against the schema —
+ * call {@link loadManifestJson} for that.
+ */
+export declare function parseManifestFile(file: ManifestFile): unknown;
+/**
+ * Find, read, parse, and schema-validate the manifest in `dir`. Returns the
+ * validated manifest plus the file it came from, or `null` when no manifest
+ * file exists.
+ */
+export declare function loadManifestFromDir(dir: string): {
+    manifest: SecretsManifest;
+    file: ManifestFile;
+} | null;
 /**
  * Compile the effective folder tree into an ordered {@link CompiledFolder} list.
  * A profile's `tree` replaces the root `tree` when a profile is set (same

@@ -1,6 +1,6 @@
 {
   "name": "@hubble-ventures/infisicml",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Infisical Secret Orchestration — federated per-package secret manifests for monorepos, unified across local dev and CI.",
   "keywords": [
     "infisical",
@@ -58,6 +58,7 @@
     "version": "npm run build"
   },
   "dependencies": {
+    "yaml": "^2.9.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {

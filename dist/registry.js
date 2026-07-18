@@ -1,20 +1,23 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { loadManifestJson } from "./manifest.js";
+import { hasManifestFile, loadManifestFromDir, } from "./manifest.js";
 /**
- * Discover every `secrets.json` in the repo, driven entirely by
- * `config.discovery` — no repo-specific directory constants. Explicit
- * `packages` win over `roots`-discovered entries at the same directory.
+ * Enumerate every package directory that holds a secrets manifest, driven
+ * entirely by `config.discovery` — no repo-specific directory constants.
+ * Explicit `packages` win over `roots`-discovered entries at the same directory.
+ *
+ * This is a cheap presence scan: it does NOT parse, validate, or resolve
+ * manifest ambiguity, so a stale or malformed manifest in one package never
+ * blocks discovery of the others. Resolution happens in {@link loadPackage},
+ * per package, only for the packages a command actually uses.
  */
-export function discoverManifests(config) {
+export function discoverPackages(config) {
     const { repoRoot } = config;
     const byDir = new Map();
-    const scanDir = (dir, id) => {
-        const manifestPath = join(dir, "secrets.json");
-        if (!existsSync(manifestPath))
+    const consider = (dir, id) => {
+        if (!hasManifestFile(dir))
             return;
-        const parsed = loadManifestJson(JSON.parse(readFileSync(manifestPath, "utf8")));
-        byDir.set(resolve(dir), { dir, id, config: parsed });
+        byDir.set(resolve(dir), { id, dir });
     };
     for (const root of config.discovery.roots ?? []) {
         const rootAbs = join(repoRoot, root);
@@ -23,13 +26,35 @@ export function discoverManifests(config) {
         for (const entry of readdirSync(rootAbs, { withFileTypes: true })) {
             if (!entry.isDirectory())
                 continue;
-            scanDir(join(rootAbs, entry.name), entry.name);
+            consider(join(rootAbs, entry.name), entry.name);
         }
     }
     // Explicit packages last so a custom id/dir overrides a roots-discovered one.
     for (const { id, dir } of config.discovery.packages ?? []) {
-        scanDir(join(repoRoot, dir), id);
+        consider(join(repoRoot, dir), id);
     }
     return [...byDir.values()].sort((a, b) => a.id.localeCompare(b.id));
+}
+/**
+ * Resolve, parse, and schema-validate one package's manifest. Throws if the
+ * directory is ambiguous (more than one manifest file) or the manifest is
+ * invalid — scoped to this package, so an unrelated broken sibling never blocks
+ * a command that doesn't load it.
+ */
+export function loadPackage(ref) {
+    const loaded = loadManifestFromDir(ref.dir);
+    if (!loaded) {
+        // hasManifestFile was true at discovery; the file vanished in between.
+        throw new Error(`No secrets manifest in ${ref.dir}`);
+    }
+    return { id: ref.id, dir: ref.dir, config: loaded.manifest, file: loaded.file };
+}
+/**
+ * Discover and load every package's manifest. Loads all — to load only a
+ * targeted subset (so an unrelated ambiguous/broken package can't abort the
+ * run), use {@link discoverPackages} + {@link loadPackage} instead.
+ */
+export function discoverManifests(config) {
+    return discoverPackages(config).map(loadPackage);
 }
 //# sourceMappingURL=registry.js.map

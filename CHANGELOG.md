@@ -4,6 +4,41 @@ All notable changes to `infisicml` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-07-18
+
+### Added
+
+- **YAML manifests, as the primary format.** Each package's manifest may now be
+  `secrets.yaml`, `secrets.yml`, or `secrets.json` — the same schema either way.
+  YAML is the default and reads best for hand-authored manifests; JSON stays
+  fully supported (handy for generated manifests). Discovery prefers YAML, but a
+  directory containing **more than one** manifest file is a **hard error** rather
+  than a silent pick — a stale extra manifest must never change which secret tree
+  a non-interactive lane (`export-gha` → `GITHUB_ENV`) writes. No migration is
+  required — existing `secrets.json` files keep working unchanged.
+
+  ```yaml
+  # secrets.yaml
+  secrets:
+    - clerk:
+        - CLERK_PUBLISHABLE_KEY: VITE_CLERK_PUBLISHABLE_KEY
+    - posthog:
+        - POSTHOG_PROJECT_TOKEN
+  ```
+
+  The ambiguity error is **scoped to the package actually being loaded**:
+  discovery now enumerates packages without parsing them, so a single ambiguous
+  (or invalid) directory no longer aborts commands that don't touch it — `pull web`
+  or `paths web` succeed even if an unrelated `apps/legacy/` holds two manifests;
+  only a command that loads that package (`pull legacy`, `pull` with no ids,
+  `list`, `validate`) surfaces the error.
+
+  New public API: `findManifestFile`, `hasManifestFile`, `loadManifestFromDir`,
+  `parseManifestFile`, `MANIFEST_FILENAMES`, the `ManifestFile` / `ManifestFormat`
+  types, plus `discoverPackages` / `loadPackage` and the `PackageRef` type for
+  two-phase (enumerate-then-load) discovery. A discovered `PackageManifest` now
+  carries the `file` it was loaded from.
+
 ## [2.0.0] - 2026-07-17
 
 ### Changed (breaking — manifest format)
@@ -163,6 +198,8 @@ changes to either ship only in a new major.
 - **Published JSON Schema** for `secrets.json`, served from
   `https://cdn.jsdelivr.net/npm/@hubble-ventures/infisicml@1/schema/secrets.schema.json`.
 
+[2.1.0]: https://github.com/hubble-ventures/infisicml/releases/tag/v2.1.0
+[2.0.0]: https://github.com/hubble-ventures/infisicml/releases/tag/v2.0.0
 [1.2.0]: https://github.com/hubble-ventures/infisicml/releases/tag/v1.2.0
 [1.1.0]: https://github.com/hubble-ventures/infisicml/releases/tag/v1.1.0
 [1.0.0]: https://github.com/hubble-ventures/infisicml/releases/tag/v1.0.0

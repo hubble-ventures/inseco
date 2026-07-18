@@ -2,7 +2,7 @@
 
 **Infisical Secret Orchestration** — federated, per-package secret manifests for monorepos, unified across local development and CI.
 
-[Infisical](https://infisical.com) gives you a vault and the primitives to read from it (a CLI, a REST API, machine-identity auth, a GitHub Action). All of those operate on **one folder / one environment / one process at a time**. Infisicml is the layer above that: it lets each package in a monorepo declare which vault folders it needs in a committed `secrets.json`, then materializes those secrets **the same way** whether you're a developer running a local pull or a CI job exporting into `GITHUB_ENV`.
+[Infisical](https://infisical.com) gives you a vault and the primitives to read from it (a CLI, a REST API, machine-identity auth, a GitHub Action). All of those operate on **one folder / one environment / one process at a time**. Infisicml is the layer above that: it lets each package in a monorepo declare which vault folders it needs in a committed manifest (`secrets.yaml`, or `secrets.json`), then materializes those secrets **the same way** whether you're a developer running a local pull or a CI job exporting into `GITHUB_ENV`.
 
 > Infisicml orchestrates Infisical. It stores no secrets and never sees your vault contents at rest — the vault, auth, and secret values stay in Infisical.
 
@@ -10,11 +10,11 @@
 
 | Problem | Native Infisical | Infisicml |
 |---|---|---|
-| N packages each need a different slice of the vault | Hand-write export commands per app×folder | One committed `secrets.json` per package, auto-discovered |
+| N packages each need a different slice of the vault | Hand-write export commands per app×folder | One committed manifest (`secrets.yaml`/`.json`) per package, auto-discovered |
 | Dev uses the CLI, CI uses the API | Two integrations kept in sync by hand | One `SecretsProvider` abstraction; identical downstream logic |
 | Vault names a secret once, but Vite wants `VITE_*` and Next wants `NEXT_PUBLIC_*` | Each workflow re-derives the prefixed copy | Declare `aliases` once; applied in dev **and** CI |
 | Skip the pull in CI when vars are already injected | Bash guards in every workflow | `ci.skipWhenEnv` / `ci.stubInCi` policy |
-| A deploy needs exactly the runtime keys, not the deploy creds | Hand-maintained allowlist | `profiles` + `advertiseKeys` hook — `secrets.json` is the source of truth |
+| A deploy needs exactly the runtime keys, not the deploy creds | Hand-maintained allowlist | `profiles` + `advertiseKeys` hook — the manifest is the source of truth |
 | A client must read a shared vendor folder without ever receiving its server secrets | Split the vault or accept over-fetch | `fetch: "keys"` requests only the named keys — the vault never transmits the rest |
 
 ## Install
@@ -40,45 +40,51 @@ Requires the [`infisical` CLI](https://infisical.com/docs/cli/overview) for loca
    });
    ```
 
-2. Add a `secrets.json` next to each package. `secrets` is an **array of
-   folders** mirroring your Infisical structure; each folder is
-   `{ "name": [ ...contents ] }`. Inside a folder's array, a **bare string** is a
-   plain key, an object with a **string value** `{ "SOURCE": "TARGET" }` is an
-   alias, and an object with an **array value** `{ "sub": [ ... ] }` is a
-   subfolder. Every emitted key is named (default-deny; there is no wildcard).
+2. Add a `secrets.yaml` next to each package (YAML is the primary format;
+   `secrets.json` is equally supported — see the note below). `secrets` is an
+   **array of folders** mirroring your Infisical structure; each folder is
+   `name: [ ...contents ]`. Inside a folder's array, a **bare string** is a
+   plain key, an entry with a **string value** `SOURCE: TARGET` is an alias, and
+   an entry with an **array value** `sub: [ ... ]` is a subfolder. Every emitted
+   key is named (default-deny; there is no wildcard).
 
-   ```jsonc
-   {
-     "$schema": "https://cdn.jsdelivr.net/npm/@hubble-ventures/infisicml@2/schema/secrets.schema.json",
-     "output": ".env", // written next to this manifest; defaults to .env.secrets
-     "secrets": [
-       // Canonical vault key → the prefixed name a build tool expects.
-       { "clerk": [{ "CLERK_PUBLISHABLE_KEY": "VITE_CLERK_PUBLISHABLE_KEY" }] },
-       // Fan one canonical key out to several prefixes: repeat the alias, one
-       // target each (an array value would mean a subfolder, not multi-target).
-       { "google": [
-         { "GOOGLE_MAPS_API_KEY": "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY" },
-         { "GOOGLE_MAPS_API_KEY": "VITE_GOOGLE_MAPS_API_KEY" }
-       ] },
-       { "posthog": [
-         "POSTHOG_PROJECT_TOKEN",
-         // A real Infisical subfolder at /posthog/eu.
-         { "eu": ["POSTHOG_EU_HOST"] }
-       ] }
-     ]
-   }
+   ```yaml
+   # yaml-language-server: $schema=https://cdn.jsdelivr.net/npm/@hubble-ventures/infisicml@2/schema/secrets.schema.json
+   output: .env # written next to this manifest; defaults to .env.secrets
+   secrets:
+     # Canonical vault key → the prefixed name a build tool expects.
+     - clerk:
+         - CLERK_PUBLISHABLE_KEY: VITE_CLERK_PUBLISHABLE_KEY
+     # Fan one canonical key out to several prefixes: repeat the alias, one
+     # target each (an array value would mean a subfolder, not multi-target).
+     - google:
+         - GOOGLE_MAPS_API_KEY: EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
+         - GOOGLE_MAPS_API_KEY: VITE_GOOGLE_MAPS_API_KEY
+     - posthog:
+         - POSTHOG_PROJECT_TOKEN
+         # A real Infisical subfolder at /posthog/eu.
+         - eu:
+             - POSTHOG_EU_HOST
    ```
 
    An alias entry emits **both** its canonical name and the target. Keys you
    don't name are never pulled, so a client package can share a vendor folder yet
    emit only the public key — the server secret is simply undeclared.
 
+   > **Format:** each package's manifest may be `secrets.yaml`, `secrets.yml`, or
+   > `secrets.json` — the same schema either way. YAML is the default and reads
+   > best for hand-authored manifests; JSON is handy for generated ones. If a
+   > directory has more than one, `secrets.yaml` wins. See
+   > [`examples/yaml/secrets.yaml`](./examples/yaml/secrets.yaml) and
+   > [`examples/json/secrets.json`](./examples/json/secrets.json) for the same manifest in
+   > both formats.
+
 3. Pull secrets into gitignored `.env.secrets` files:
 
    ```bash
    npx infisicml pull                 # every package
    npx infisicml pull web api --force # specific ids, bypass the exists-check
-   npx infisicml validate             # check every secrets.json against the schema
+   npx infisicml validate             # check every manifest against the schema
    ```
 
 See [`examples/`](./examples) for a fuller config and manifest.
@@ -90,7 +96,7 @@ See [`examples/`](./examples) for a fuller config and manifest.
 | `pull [ids...]` | Write `.env.secrets` locally (uses `infisical export`) |
 | `export-gha <id>` | Mask + append secrets to `GITHUB_ENV` (REST API + GitHub OIDC) |
 | `list` | Show every manifest's folder tree and declared keys |
-| `validate` | Validate every `secrets.json` against the schema |
+| `validate` | Validate every manifest against the schema |
 | `paths <id>` | Print resolved folder paths (`--comma` for scripting) |
 | `run <id> -- <cmd...>` | Thin `infisical run` wrapper (prefer `pull` + `.env.secrets`) |
 
@@ -139,18 +145,18 @@ Log in once as yourself; infisicml shells out to `infisical export` under your s
 
 ```bash
 infisical login          # authenticate as you
-npx infisicml pull          # write .env.secrets next to every secrets.json
+npx infisicml pull          # write .env.secrets next to every manifest
 ```
 
 Load `.env.secrets` however your dev runtime already loads env files. See [`examples/local-dev.md`](./examples/local-dev.md) for package-script and task-runner wiring.
 
 ## Concepts
 
-- **Manifest (`secrets.json`)** — per package: `secrets` (an array of folders → keys), optional `profiles`, `fetch`, `ci`, `environments`, `output`.
-- **Output file** — `output` sets the written filename (default `.env.secrets`), placed **next to the manifest**. Because each package owns its own `secrets.json`, this gives a distinct file per package: a root manifest with `"output": ".env.local"` writes the repo-root `.env.local`; a manifest in `apps/backend` with `"output": ".env"` writes `apps/backend/.env`. `output` is a filename only (no path separators) — to target a different directory, place the manifest in that directory.
-- **Secrets tree** — an **array of folders** mirroring your Infisical vault; each folder is `{ "name": [ ...contents ] }`. Inside the array: a bare string is a plain key, an object with a string value `{ "SOURCE": "TARGET" }` is an alias, and an object with an array value `{ "sub": [ ... ] }` is a real subfolder. Every emitted key is named — there is no wildcard, so a folder never leaks a key you didn't declare (default-deny). See [Key selection](#key-selection-the-tree-is-the-allowlist) below.
+- **Manifest (`secrets.yaml` or `secrets.json`)** — per package: `secrets` (an array of folders → keys), optional `profiles`, `fetch`, `ci`, `environments`, `output`. YAML is the default format; JSON is equally supported. When a directory has both, `secrets.yaml` wins.
+- **Output file** — `output` sets the written filename (default `.env.secrets`), placed **next to the manifest**. Because each package owns its own manifest, this gives a distinct file per package: a root manifest with `"output": ".env.local"` writes the repo-root `.env.local`; a manifest in `apps/backend` with `"output": ".env"` writes `apps/backend/.env`. `output` is a filename only (no path separators) — to target a different directory, place the manifest in that directory.
+- **Secrets tree** — an **array of folders** mirroring your Infisical vault; each folder is `name: [ ...contents ]`. Inside the array: a bare string is a plain key, a mapping with a string value `SOURCE: TARGET` is an alias, and a mapping with an array value `sub: [ ... ]` is a real subfolder. Every emitted key is named — there is no wildcard, so a folder never leaks a key you didn't declare (default-deny). See [Key selection](#key-selection-the-tree-is-the-allowlist) below.
 - **Profiles** — named alternate trees that *replace* the base `secrets` when `--profile` is set. The base tree is runtime secrets; a profile can add deploy/release folders (e.g. `fly`).
-- **Aliases** — an alias entry `{ "SOURCE": "TARGET" }` maps a canonical vault key to one target. To fan a single key out to every framework prefix (`EXPO_PUBLIC_*`, `VITE_*`, `NEXT_PUBLIC_*`), repeat the entry — one target each (an array value means a subfolder). Both the canonical name and each target are emitted. Real secrets of a target name always win; the operation is idempotent and never overwrites.
+- **Aliases** — an alias entry `SOURCE: TARGET` maps a canonical vault key to one target. To fan a single key out to every framework prefix (`EXPO_PUBLIC_*`, `VITE_*`, `NEXT_PUBLIC_*`), repeat the entry — one target each (an array value means a subfolder). Both the canonical name and each target are emitted. Real secrets of a target name always win; the operation is idempotent and never overwrites.
 - **Fetch mode** — `fetch: "keys"` requests only the declared keys, so the vault never transmits the rest (wire-level least privilege). Default `"folder"` reads whole folders and selects the declared keys locally. See [Wire-level least privilege](#wire-level-least-privilege-fetch-keys) below.
 - **CI skip/stub** — `ci.skipWhenEnv` skips the pull when all listed vars are already set in CI; `ci.stubInCi` always stubs in CI. Both write a `.env.secrets` from `process.env` instead of calling Infisical.
 - **Optional keys** — `environments.<slug>.optionalKeys` downgrade a missing declared key to a `::notice::` instead of a failure.
@@ -169,15 +175,15 @@ A web/mobile client needs **only** the publishable key. Because the tree is defa
 name that one key and nothing else is pulled — `STRIPE_SECRET_KEY` is simply never declared,
 so it can't reach a Vite/Expo client build's env (or, via the CI action, `GITHUB_ENV`).
 
-```jsonc
-// apps/web/secrets.json — a client package
-{
-  "secrets": [
-    { "stripe": [{ "STRIPE_PUBLISHABLE_KEY": "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY" }] },
-    { "google": [{ "GOOGLE_MAPS_API_KEY": "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY" }] },
-    { "vercel": ["VERCEL_AUTOMATION_BYPASS_SECRET"] }
-  ]
-}
+```yaml
+# apps/web/secrets.yaml — a client package
+secrets:
+  - stripe:
+      - STRIPE_PUBLISHABLE_KEY: EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY
+  - google:
+      - GOOGLE_MAPS_API_KEY: EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
+  - vercel:
+      - VERCEL_AUTOMATION_BYPASS_SECRET
 ```
 
 The written `.env.secrets` (and, in CI, `GITHUB_ENV`) contains **only** the declared keys and
@@ -202,15 +208,14 @@ machine / the CI runner — they're just never written to `.env` or `GITHUB_ENV`
 setups that's fine. When you need the vault to **not even transmit** the secrets you don't
 use, set `fetch: "keys"`:
 
-```jsonc
-// apps/web/secrets.json — client package, strict wire-level least privilege
-{
-  "fetch": "keys",
-  "secrets": [
-    { "stripe": [{ "STRIPE_PUBLISHABLE_KEY": "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY" }] },
-    { "google": ["GOOGLE_MAPS_API_KEY"] }
-  ]
-}
+```yaml
+# apps/web/secrets.yaml — client package, strict wire-level least privilege
+fetch: keys
+secrets:
+  - stripe:
+      - STRIPE_PUBLISHABLE_KEY: EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY
+  - google:
+      - GOOGLE_MAPS_API_KEY
 ```
 
 In `keys` mode infisicml reads **only** the declared keys. Where the guarantee bites depends on
@@ -309,7 +314,7 @@ works if you ever need it.
 
 ## Design
 
-Everything repo-specific lives in `infisicml.config` — package discovery, the project-id source, the OIDC audience, and deploy-time key advertisement are all configuration, so nothing about one repo's layout is baked into the tool. The manifest contract (`secrets.json`) is the stable public interface, versioned via the [published JSON Schema](./schema/secrets.schema.json).
+Everything repo-specific lives in `infisicml.config` — package discovery, the project-id source, the OIDC audience, and deploy-time key advertisement are all configuration, so nothing about one repo's layout is baked into the tool. The manifest contract (`secrets.yaml` or `secrets.json`) is the stable public interface, versioned via the [published JSON Schema](./schema/secrets.schema.json).
 
 ## License
 
