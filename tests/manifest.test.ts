@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   findManifestFile,
   loadManifestFromDir,
@@ -169,30 +169,18 @@ describe("manifest", () => {
       );
     });
 
-    it("prefers secrets.yaml over secrets.json when both exist, and warns", () => {
+    it("throws on an ambiguous directory with more than one manifest", () => {
       writeFileSync(join(dir, "secrets.yaml"), "secrets:\n  - from-yaml: [A]\n");
       writeFileSync(
         join(dir, "secrets.json"),
         JSON.stringify({ secrets: [{ "from-json": ["A"] }] })
       );
-      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-      const loaded = loadManifestFromDir(dir);
-      expect(loaded?.file.filename).toBe("secrets.yaml");
-      expect(resolveCompiledFolders(loaded!.manifest).map((f) => f.path)).toEqual(
-        ["from-yaml"]
-      );
-      // The shadowed JSON file is named in a warning so it can't go unnoticed.
-      expect(warn).toHaveBeenCalledOnce();
-      expect(warn.mock.calls[0][0]).toContain("secrets.json");
-      warn.mockRestore();
-    });
-
-    it("does not warn for a single manifest file", () => {
-      writeFileSync(join(dir, "secrets.yaml"), "secrets:\n  - clerk: [K]\n");
-      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-      loadManifestFromDir(dir);
-      expect(warn).not.toHaveBeenCalled();
-      warn.mockRestore();
+      // Refuse rather than silently pick a winner — a stale manifest must not
+      // change which secret tree a non-interactive lane (export-gha) writes.
+      expect(() => findManifestFile(dir)).toThrow(/[Aa]mbiguous/);
+      expect(() => findManifestFile(dir)).toThrow(/secrets\.yaml/);
+      expect(() => findManifestFile(dir)).toThrow(/secrets\.json/);
+      expect(() => loadManifestFromDir(dir)).toThrow(/[Aa]mbiguous/);
     });
 
     it("supports the .yml extension", () => {

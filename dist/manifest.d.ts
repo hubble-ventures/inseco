@@ -82,10 +82,12 @@ export type ManifestFile = {
  * Locate the manifest file in `dir`, preferring YAML over JSON
  * ({@link MANIFEST_FILENAMES}). Returns `null` when no manifest exists.
  *
- * When a directory holds more than one manifest file, the preference order
- * picks the winner and a warning names the shadowed file(s) — so a stale or
- * experimental `secrets.yaml` left next to the intended `secrets.json` (or vice
- * versa) never silently changes which secret tree is pulled.
+ * A directory with more than one manifest file is a hard error: picking a winner
+ * by preference order would let a stale or experimental `secrets.yaml` left next
+ * to the intended `secrets.json` (or vice versa) silently change which secret
+ * tree is pulled — and non-interactive lanes (the GitHub Action's `export-gha`)
+ * would write it into `GITHUB_ENV` and still succeed. Refuse instead of guessing;
+ * the operator removes the extra file to resolve.
  */
 export declare function findManifestFile(dir: string): ManifestFile | null;
 /**

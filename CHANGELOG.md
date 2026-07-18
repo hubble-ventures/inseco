@@ -11,11 +11,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **YAML manifests, as the primary format.** Each package's manifest may now be
   `secrets.yaml`, `secrets.yml`, or `secrets.json` — the same schema either way.
   YAML is the default and reads best for hand-authored manifests; JSON stays
-  fully supported (handy for generated manifests). Discovery prefers YAML: when a
-  directory has more than one, `secrets.yaml` wins **and a warning names the
-  shadowed file** so a stale extra manifest never silently changes what's pulled.
-  No migration is required — existing `secrets.json` files keep working
-  unchanged.
+  fully supported (handy for generated manifests). Discovery prefers YAML, but a
+  directory containing **more than one** manifest file is a **hard error** rather
+  than a silent pick — a stale extra manifest must never change which secret tree
+  a non-interactive lane (`export-gha` → `GITHUB_ENV`) writes. No migration is
+  required — existing `secrets.json` files keep working unchanged.
 
   ```yaml
   # secrets.yaml
