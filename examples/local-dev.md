@@ -13,8 +13,8 @@ infisical login           # authenticate as yourself (opens a browser)
 ```
 
 Add an `infisicml.config.ts` at the repo root (see [`infisicml.config.ts`](./infisicml.config.ts))
-and a manifest next to each package (see [`secrets.yaml`](./secrets.yaml), or
-[`secrets.json`](./secrets.json) for the JSON form).
+and a manifest next to each package (see [`yaml/secrets.yaml`](./yaml/secrets.yaml),
+or [`json/secrets.json`](./json/secrets.json) for the JSON form).
 
 ## Everyday flow
 

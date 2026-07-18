@@ -10,7 +10,7 @@ import {
 } from "../manifest.js";
 import { resolveOptionalKeys } from "../optional-keys.js";
 import { RemoteProvider } from "../providers/remote.js";
-import { discoverManifests } from "../registry.js";
+import { discoverPackages, loadPackage } from "../registry.js";
 import type { CompiledFolder } from "../tree.js";
 
 export type ExportGhaOptions = {
@@ -72,11 +72,13 @@ export async function runExportGha(options: ExportGhaOptions): Promise<void> {
     throw new Error("INFISICAL_PROJECT_SLUG required");
   }
 
-  const manifests = discoverManifests(config);
-  const manifest = manifests.find((m) => m.id === options.packageId);
-  if (!manifest) {
+  const ref = discoverPackages(config).find(
+    (p) => p.id === options.packageId
+  );
+  if (!ref) {
     throw new Error(`Unknown package id: ${options.packageId}`);
   }
+  const manifest = loadPackage(ref);
 
   // The base tree holds the app's runtime secrets; a profile (e.g. `deploy`)
   // may replace it with a superset that also carries deploy-time credentials.

@@ -1,13 +1,13 @@
 import { loadConfig } from "../config.js";
 import { normalizeFolderPath, resolveCompiledFolders, resolveFetchMode, } from "../manifest.js";
-import { discoverManifests } from "../registry.js";
+import { discoverPackages, loadPackage } from "../registry.js";
 export async function runPaths(options) {
     const config = await loadConfig(options.cwd);
-    const manifests = discoverManifests(config);
-    const manifest = manifests.find((m) => m.id === options.packageId);
-    if (!manifest) {
+    const ref = discoverPackages(config).find((p) => p.id === options.packageId);
+    if (!ref) {
         throw new Error(`Unknown package id: ${options.packageId}`);
     }
+    const manifest = loadPackage(ref);
     const folders = resolveCompiledFolders(manifest.config, options.profile);
     const normalized = folders.map((f) => normalizeFolderPath(f.path));
     // `paths` feeds the infisical CLI, which fetches whole folders — the tree's

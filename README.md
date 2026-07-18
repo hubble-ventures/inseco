@@ -75,8 +75,8 @@ Requires the [`infisical` CLI](https://infisical.com/docs/cli/overview) for loca
    > `secrets.json` — the same schema either way. YAML is the default and reads
    > best for hand-authored manifests; JSON is handy for generated ones. If a
    > directory has more than one, `secrets.yaml` wins. See
-   > [`examples/secrets.yaml`](./examples/secrets.yaml) and
-   > [`examples/secrets.json`](./examples/secrets.json) for the same manifest in
+   > [`examples/yaml/secrets.yaml`](./examples/yaml/secrets.yaml) and
+   > [`examples/json/secrets.json`](./examples/json/secrets.json) for the same manifest in
    > both formats.
 
 3. Pull secrets into gitignored `.env.secrets` files:

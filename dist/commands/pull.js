@@ -3,7 +3,7 @@ import { loadConfig } from "../config.js";
 import { shouldSkipInfisicalPull } from "../ci-skip.js";
 import { commandExists, LocalProvider } from "../providers/local.js";
 import { pullManifest } from "../pull.js";
-import { discoverManifests } from "../registry.js";
+import { discoverPackages, loadPackage } from "../registry.js";
 export async function runPull(options) {
     const config = await loadConfig(options.cwd);
     const repoRoot = config.repoRoot;
@@ -11,27 +11,30 @@ export async function runPull(options) {
     if (!config.projectId) {
         throw new Error("INFISICAL_PROJECT_ID not resolved — set config.projectId, projectIdEnvFile, or the INFISICAL_PROJECT_ID env var");
     }
-    let manifests = discoverManifests(config);
+    // Select target packages first, then load only those — so an unrelated
+    // package with an ambiguous or invalid manifest never blocks a scoped pull.
+    let targets = discoverPackages(config);
     if (options.here) {
         const cwd = process.cwd();
-        const match = manifests.find((m) => resolve(m.dir) === resolve(cwd));
+        const match = targets.find((p) => resolve(p.dir) === resolve(cwd));
         if (!match) {
             throw new Error(`No secrets manifest in ${cwd}`);
         }
-        manifests = [match];
+        targets = [match];
     }
     else if (options.ids.length > 0) {
         const allowed = new Set(options.ids);
-        manifests = manifests.filter((m) => allowed.has(m.id));
-        const missing = options.ids.filter((id) => !manifests.some((m) => m.id === id));
+        targets = targets.filter((p) => allowed.has(p.id));
+        const missing = options.ids.filter((id) => !targets.some((p) => p.id === id));
         if (missing.length > 0) {
             throw new Error(`Unknown package id(s): ${missing.join(", ")}`);
         }
     }
-    if (manifests.length === 0) {
+    if (targets.length === 0) {
         console.log("No secrets manifests found.");
         return;
     }
+    const manifests = targets.map(loadPackage);
     // The infisical CLI is only needed for manifests that will actually pull.
     // Mirror pullManifest's own skip decision exactly so CI stubs never demand a
     // tool they don't use.

@@ -35,6 +35,7 @@ export {
 export { enforceKnownKeys } from "./include.js";
 export {
   findManifestFile,
+  hasManifestFile,
   loadManifestFromDir,
   loadManifestJson,
   MANIFEST_FILENAMES,
@@ -61,7 +62,13 @@ export {
   pullManifest,
   writeInjectedSecretsStub,
 } from "./pull.js";
-export { discoverManifests, type PackageManifest } from "./registry.js";
+export {
+  discoverManifests,
+  discoverPackages,
+  loadPackage,
+  type PackageManifest,
+  type PackageRef,
+} from "./registry.js";
 export {
   type CompiledFolder,
   type CompiledKey,

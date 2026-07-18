@@ -26,9 +26,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
         - POSTHOG_PROJECT_TOKEN
   ```
 
-  New public API: `findManifestFile`, `loadManifestFromDir`, `parseManifestFile`,
-  `MANIFEST_FILENAMES`, and the `ManifestFile` / `ManifestFormat` types. A
-  discovered `PackageManifest` now carries the `file` it was loaded from.
+  The ambiguity error is **scoped to the package actually being loaded**:
+  discovery now enumerates packages without parsing them, so a single ambiguous
+  (or invalid) directory no longer aborts commands that don't touch it — `pull web`
+  or `paths web` succeed even if an unrelated `apps/legacy/` holds two manifests;
+  only a command that loads that package (`pull legacy`, `pull` with no ids,
+  `list`, `validate`) surfaces the error.
+
+  New public API: `findManifestFile`, `hasManifestFile`, `loadManifestFromDir`,
+  `parseManifestFile`, `MANIFEST_FILENAMES`, the `ManifestFile` / `ManifestFormat`
+  types, plus `discoverPackages` / `loadPackage` and the `PackageRef` type for
+  two-phase (enumerate-then-load) discovery. A discovered `PackageManifest` now
+  carries the `file` it was loaded from.
 
 ## [2.0.0] - 2026-07-17
 

@@ -98,6 +98,15 @@ export type ManifestFile = {
  * would write it into `GITHUB_ENV` and still succeed. Refuse instead of guessing;
  * the operator removes the extra file to resolve.
  */
+/**
+ * Cheap presence check: does `dir` hold at least one manifest file? Used to
+ * enumerate package directories without parsing or resolving ambiguity, so
+ * discovery never throws on a manifest a command won't actually load.
+ */
+export function hasManifestFile(dir: string): boolean {
+  return MANIFEST_FILENAMES.some((name) => existsSync(join(dir, name)));
+}
+
 export function findManifestFile(dir: string): ManifestFile | null {
   const present = MANIFEST_FILENAMES.filter((name) =>
     existsSync(join(dir, name))

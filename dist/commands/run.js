@@ -2,16 +2,16 @@ import { spawnSync } from "node:child_process";
 import { loadConfig } from "../config.js";
 import { normalizeEnvSlug } from "../env-slug.js";
 import { normalizeFolderPath, resolveCompiledFolders } from "../manifest.js";
-import { discoverManifests } from "../registry.js";
+import { discoverPackages, loadPackage } from "../registry.js";
 export async function runExec(options) {
     const config = await loadConfig(options.cwd);
     const repoRoot = config.repoRoot;
     const envName = normalizeEnvSlug(process.env.INFISICAL_ENV ?? options.env);
-    const manifests = discoverManifests(config);
-    const manifest = manifests.find((m) => m.id === options.packageId);
-    if (!manifest) {
+    const ref = discoverPackages(config).find((p) => p.id === options.packageId);
+    if (!ref) {
         throw new Error(`Unknown package id: ${options.packageId}`);
     }
+    const manifest = loadPackage(ref);
     if (process.env.INFISICAL_DISABLE === "1") {
         const result = spawnSync(options.command[0], options.command.slice(1), {
             stdio: "inherit",

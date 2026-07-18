@@ -89,6 +89,12 @@ export type ManifestFile = {
  * would write it into `GITHUB_ENV` and still succeed. Refuse instead of guessing;
  * the operator removes the extra file to resolve.
  */
+/**
+ * Cheap presence check: does `dir` hold at least one manifest file? Used to
+ * enumerate package directories without parsing or resolving ambiguity, so
+ * discovery never throws on a manifest a command won't actually load.
+ */
+export declare function hasManifestFile(dir: string): boolean;
 export declare function findManifestFile(dir: string): ManifestFile | null;
 /**
  * Parse a manifest file's contents into the raw object, dispatching on format.

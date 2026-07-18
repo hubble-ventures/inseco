@@ -65,7 +65,16 @@ describe("pullManifest — output paths + multi-target aliases", () => {
   });
 
   function manifest(config: PackageManifest["config"]): PackageManifest {
-    return { id: "web", dir, config };
+    return {
+      id: "web",
+      dir,
+      config,
+      file: {
+        path: join(dir, "secrets.yaml"),
+        filename: "secrets.yaml",
+        format: "yaml",
+      },
+    };
   }
 
   it("writes the default .env.secrets when no output is set", async () => {
