@@ -97,12 +97,23 @@ export type ManifestFile = {
 export declare function hasManifestFile(dir: string): boolean;
 export declare function findManifestFile(dir: string): ManifestFile | null;
 /**
+ * Parse manifest source text into the raw object, dispatching on format. YAML is
+ * a superset of JSON, but we parse each with its own reader so error messages
+ * point at the right syntax. Does not validate against the schema — call
+ * {@link loadManifestJson} for that. Used for both on-disk manifests and
+ * manifest content read out of a git ref (`git show`), which never touches disk.
+ */
+export declare function parseManifestContent(raw: string, format: ManifestFormat): unknown;
+/**
  * Parse a manifest file's contents into the raw object, dispatching on format.
- * YAML is a superset of JSON, but we parse each with its own reader so error
- * messages point at the right syntax. Does not validate against the schema —
- * call {@link loadManifestJson} for that.
  */
 export declare function parseManifestFile(file: ManifestFile): unknown;
+/**
+ * The manifest format implied by a filename ({@link MANIFEST_FILENAMES}), or
+ * `null` for a name that isn't a recognized manifest file. Used to parse
+ * manifest content pulled from a git ref by filename, without a `ManifestFile`.
+ */
+export declare function manifestFormatForFilename(filename: string): ManifestFormat | null;
 /**
  * Find, read, parse, and schema-validate the manifest in `dir`. Returns the
  * validated manifest plus the file it came from, or `null` when no manifest

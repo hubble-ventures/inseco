@@ -4,6 +4,52 @@ All notable changes to `infisicml` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-07-21
+
+### Added
+
+- **`keys` — value-free key inventory.** Print the exact set of env var **names**
+  a manifest emits (canonical keys plus alias targets) for a package/profile,
+  **without contacting the vault** — no auth, no network, nothing written to
+  disk. Because a v2 manifest enumerates every emitted key, this is computed
+  entirely from the committed manifest, so the output is safe to log, paste into
+  a PR, and run in untrusted CI.
+
+  ```bash
+  infisicml keys web                       # names on stdout, one per line
+  infisicml keys api --profile deploy --json
+  infisicml keys --all --json > infisicml.keys.json   # committable snapshot
+  infisicml keys --all --check                         # CI drift gate (lockfile)
+  ```
+
+- **`diff` — key-set diff across refs or files.** Report the **added** / **removed**
+  key names between two manifest states, per `(package, profile)` — the supported,
+  value-free replacement for the worktree + dual-`pull` + `comm` migration check.
+  Reads manifests at a git ref via `git show` (no checkout, no worktree) or
+  compares two manifest files directly.
+
+  ```bash
+  infisicml diff api --from origin/main --to HEAD
+  infisicml diff --all --from v1.2.1 --to HEAD --exit-code   # non-zero on change
+  infisicml diff web --from old.yaml --to secrets.yaml       # two files, no git
+  ```
+
+- **`infisicml.keys.json` lockfile.** `keys --all --json` produces a committable,
+  deterministic snapshot of every emitted key name per package/profile;
+  `keys --all --check` fails CI when a manifest change alters the emitted key set
+  without refreshing the snapshot — catching accidental key drops/adds in code
+  review, with zero vault access.
+
+### Notes
+
+- `keys` and `diff` are **static and environment-independent by construction**:
+  they report the names a manifest *declares* it will emit, so they deliberately
+  **reject `--env`** rather than imply a per-environment check they don't perform.
+  Every payload is tagged `"mode": "static"`, and snapshots carry a
+  `schemaVersion`. They never construct a secrets provider — the value-free
+  guarantee is enforced structurally and covered by tests. See
+  [ADR 0001](./docs/adrs/0001-keys-only-resolve-and-diff.md).
+
 ## [2.1.0] - 2026-07-18
 
 ### Added

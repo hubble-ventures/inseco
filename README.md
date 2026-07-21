@@ -89,6 +89,42 @@ Requires the [`infisical` CLI](https://infisical.com/docs/cli/overview) for loca
 
 See [`examples/`](./examples) for a fuller config and manifest.
 
+## Key inventory & drift
+
+Every command above materializes secret **values**. `keys` and `diff` answer a
+different, value-free question — *which key **names** does a manifest emit?* —
+**without ever contacting the vault**. Because a v2 manifest enumerates every
+emitted key, the answer is computed entirely from the committed manifest: no
+auth, no network, nothing written to disk. The output is only names, so it's safe
+to log, paste into a PR, and run in untrusted CI.
+
+```bash
+# What does this manifest emit? (canonical keys + alias targets)
+npx infisicml keys web
+npx infisicml keys api --profile deploy --json
+
+# Diff the emitted key set across a refactor/migration — did a key silently drop?
+npx infisicml diff api --from origin/main --to HEAD
+npx infisicml diff --all --from v1.2.1 --to HEAD --exit-code   # non-zero on any change
+npx infisicml diff web --from old.secrets.yaml --to secrets.yaml   # or two files, no git
+```
+
+**Lockfile.** Snapshot every emitted name and commit it, then gate CI on drift —
+a manifest change that adds or drops a key fails review until the snapshot is
+refreshed, all without vault access:
+
+```bash
+npx infisicml keys --all --json > infisicml.keys.json   # commit this
+npx infisicml keys --all --check                        # CI: exits non-zero on drift
+```
+
+> **Static by design.** `keys`/`diff` report the names a manifest *declares* it
+> will emit (canonical keys plus alias targets). They do **not** contact the
+> vault, so they can't tell you whether a declared key actually exists there —
+> that's what `pull` is for. `diff --all` is scoped to packages discovered in the
+> working tree; to compare a single package precisely across refs (including one
+> where it didn't yet exist), use the per-package `diff <id>` form.
+
 ## CLI
 
 | Command | Purpose |
@@ -99,8 +135,10 @@ See [`examples/`](./examples) for a fuller config and manifest.
 | `validate` | Validate every manifest against the schema |
 | `paths <id>` | Print resolved folder paths (`--comma` for scripting) |
 | `run <id> -- <cmd...>` | Thin `infisical run` wrapper (prefer `pull` + `.env.secrets`) |
+| `keys <id>` / `keys --all` | Print the key **names** a manifest emits — no vault access ([below](#key-inventory--drift)) |
+| `diff <id> --from … --to …` | Diff the emitted key names between two refs/files ([below](#key-inventory--drift)) |
 
-Common flags: `--env`, `--profile`, `--force`, `--here` (pull the cwd package), `--turbo` (always write, for Turbo caching).
+Common flags: `--env`, `--profile`, `--force`, `--here` (pull the cwd package), `--turbo` (always write, for Turbo caching). Note that `keys` and `diff` deliberately **reject `--env`**: their output is the declared key names, which never depend on the environment.
 
 ## Authentication
 

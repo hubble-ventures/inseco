@@ -128,14 +128,32 @@ export function findManifestFile(dir: string): ManifestFile | null {
 }
 
 /**
+ * Parse manifest source text into the raw object, dispatching on format. YAML is
+ * a superset of JSON, but we parse each with its own reader so error messages
+ * point at the right syntax. Does not validate against the schema — call
+ * {@link loadManifestJson} for that. Used for both on-disk manifests and
+ * manifest content read out of a git ref (`git show`), which never touches disk.
+ */
+export function parseManifestContent(raw: string, format: ManifestFormat): unknown {
+  return format === "yaml" ? parseYaml(raw) : JSON.parse(raw);
+}
+
+/**
  * Parse a manifest file's contents into the raw object, dispatching on format.
- * YAML is a superset of JSON, but we parse each with its own reader so error
- * messages point at the right syntax. Does not validate against the schema —
- * call {@link loadManifestJson} for that.
  */
 export function parseManifestFile(file: ManifestFile): unknown {
-  const raw = readFileSync(file.path, "utf8");
-  return file.format === "yaml" ? parseYaml(raw) : JSON.parse(raw);
+  return parseManifestContent(readFileSync(file.path, "utf8"), file.format);
+}
+
+/**
+ * The manifest format implied by a filename ({@link MANIFEST_FILENAMES}), or
+ * `null` for a name that isn't a recognized manifest file. Used to parse
+ * manifest content pulled from a git ref by filename, without a `ManifestFile`.
+ */
+export function manifestFormatForFilename(filename: string): ManifestFormat | null {
+  if (filename.endsWith(".json")) return "json";
+  if (filename.endsWith(".yaml") || filename.endsWith(".yml")) return "yaml";
+  return null;
 }
 
 /**
