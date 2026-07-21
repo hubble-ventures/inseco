@@ -1,6 +1,6 @@
 # ADR 0001 — Keys-only resolve (`keys`) and key-set diff (`diff`)
 
-- **Status:** Accepted (planned; not yet implemented)
+- **Status:** Accepted — implemented in 2.2.0
 - **Date:** 2026-07-21
 - **Issue:** [#10](https://github.com/hubble-ventures/infisicml/issues/10)
 - **Target version:** 2.2.0 (additive, non-breaking)

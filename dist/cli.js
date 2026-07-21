@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
+import { runDiff } from "./commands/diff.js";
 import { runExportGha } from "./commands/export-gha.js";
+import { runKeys } from "./commands/keys.js";
 import { runList } from "./commands/list.js";
 import { runPaths } from "./commands/paths.js";
 import { runPull } from "./commands/pull.js";
@@ -15,6 +17,13 @@ Usage:
   infisicml validate
   infisicml paths <id> [--profile NAME] [--comma]
   infisicml run <id> [--profile NAME] [--env ENV] -- <command...>
+  infisicml keys <id> [--profile NAME] [--json]        # declared emitted key NAMES (no vault access)
+  infisicml keys --all [--json | --check]              # snapshot / lockfile of every key name
+  infisicml diff <id> --from <ref|file> --to <ref|file> [--profile NAME] [--json] [--exit-code]
+  infisicml diff --all --from <ref> --to <ref> [--json] [--exit-code]
+
+'keys' and 'diff' are value-free: they report key NAMES only and never contact
+the vault, so they're safe to log, paste into a PR, and run in untrusted CI.
 
 Config: infisicml.config.{ts,json} at the repo root. See https://github.com/hubble-ventures/infisicml
 `;
@@ -45,6 +54,12 @@ async function main() {
                 break;
             case "run":
                 await handleRun(rest);
+                break;
+            case "keys":
+                await handleKeys(rest);
+                break;
+            case "diff":
+                await handleDiff(rest);
                 break;
             default:
                 console.error(`Unknown subcommand: ${subcommand}\n`);
@@ -143,6 +158,55 @@ async function handleRun(args) {
         profile: values.profile,
         env: values.env ?? "development",
         command,
+    });
+    process.exit(code);
+}
+// `keys`/`diff` intentionally omit `--env`: static key NAMES never depend on the
+// environment (ADR 0001 §2), so parseArgs rejects `--env` as unknown rather than
+// silently accepting it and implying a per-env check that didn't happen.
+async function handleKeys(args) {
+    const { values, positionals } = parseArgs({
+        args,
+        allowPositionals: true,
+        options: {
+            profile: { type: "string" },
+            all: { type: "boolean", default: false },
+            json: { type: "boolean", default: false },
+            check: { type: "boolean", default: false },
+        },
+    });
+    await runKeys({
+        packageId: positionals[0],
+        profile: values.profile,
+        all: values.all ?? false,
+        json: values.json ?? false,
+        check: values.check ?? false,
+    });
+}
+async function handleDiff(args) {
+    const { values, positionals } = parseArgs({
+        args,
+        allowPositionals: true,
+        options: {
+            from: { type: "string" },
+            to: { type: "string" },
+            profile: { type: "string" },
+            all: { type: "boolean", default: false },
+            json: { type: "boolean", default: false },
+            "exit-code": { type: "boolean", default: false },
+        },
+    });
+    if (!values.from || !values.to) {
+        throw new Error("diff requires --from and --to");
+    }
+    const code = await runDiff({
+        packageId: positionals[0],
+        from: values.from,
+        to: values.to,
+        profile: values.profile,
+        all: values.all ?? false,
+        json: values.json ?? false,
+        exitCode: values["exit-code"] ?? false,
     });
     process.exit(code);
 }

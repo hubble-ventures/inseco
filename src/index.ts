@@ -23,6 +23,13 @@ export {
 export { parseDotenv, serializeDotenv } from "./dotenv.js";
 export { normalizeEnvSlug } from "./env-slug.js";
 export {
+  gitRoot,
+  isGitRepo,
+  loadManifestAtRef,
+  refExists,
+  showFileAtRef,
+} from "./git.js";
+export {
   appendPlainToGithubEnv,
   appendSecretsToGithubEnv,
   appendSecretToGithubEnv,
@@ -32,6 +39,20 @@ export {
   keysForScope,
   runAdvertiseKeysHooks,
 } from "./hooks.js";
+export {
+  buildSnapshot,
+  DEFAULT_PROFILE_LABEL,
+  diffKeyNames,
+  emittedKeyNames,
+  emittedNamesFor,
+  hasKeyChange,
+  KEYS_SCHEMA_VERSION,
+  type KeySetDiff,
+  type KeysSnapshot,
+  profileArg,
+  profileLabels,
+  serializeSnapshot,
+} from "./keys.js";
 export { enforceKnownKeys } from "./include.js";
 export {
   findManifestFile,
@@ -42,7 +63,9 @@ export {
   MANIFEST_LABEL,
   type ManifestFile,
   type ManifestFormat,
+  manifestFormatForFilename,
   normalizeFolderPath,
+  parseManifestContent,
   parseManifestFile,
   resolveCompiledFolders,
   resolveFetchMode,

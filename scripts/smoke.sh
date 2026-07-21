@@ -30,6 +30,15 @@ run() { echo "== infisicml $* =="; ( cd "$FIXTURE" && node "$CLI" "$@" ); echo; 
 run validate
 run list
 run paths api --comma
+run keys web
+run keys --all --json
+
+# diff is value-free; prove the file-vs-file mode (no git needed) reports no
+# change when a manifest is compared against itself.
+echo "== infisicml diff api (same file, expect no change) =="
+( cd "$FIXTURE" && node "$CLI" diff api \
+    --from apps/api/secrets.json --to apps/api/secrets.json )
+echo
 
 echo "== infisicml pull api (CI stub, no Infisical) =="
 STUB="$FIXTURE/apps/api/.env.secrets"
